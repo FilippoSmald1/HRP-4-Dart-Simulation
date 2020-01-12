@@ -14,7 +14,7 @@ ADVICE: install Dart from source by following the described procedure on Dart We
              git checkout tags/v6.6.1 
                   
 to not checkout the latest tag of DART 6, otherwise you may have issues in running the code. The problem is only related to Dart, so if you are already practiced with it, feel free to use any version.  
-Attention: the mesh paths in HRP-4 urdf file must be modified!
+Attention: the mesh paths in HRP-4 urdf file must be modified and the Eigen directory should be decompressed if you need it!
 
 SIMULATION REMARKS
 
