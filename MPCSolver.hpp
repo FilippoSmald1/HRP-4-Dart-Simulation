@@ -13,7 +13,7 @@ namespace mpcSolver{
         MPCSolver(double, double, double, Eigen::Vector3d, double, double, double, double, double, double, double, double, double, double);
 
         // Main method
-        void solve(Eigen::Vector3d, Eigen::Vector3d, Eigen::Vector3d, Eigen::Affine3d, bool, double, double, double, double);
+        void solve(Eigen::Vector3d, Eigen::Vector3d, Eigen::Vector3d, Eigen::Affine3d, bool, double, double, double, double, bool);
 
         // Get stuff
         Eigen::VectorXd getOptimalCoMPosition();
@@ -48,8 +48,6 @@ namespace mpcSolver{
         Eigen::Vector3d updateState(double,int,double);
         void changeReferenceFrame(Eigen::Affine3d);
 
-        // Log
-        void logToFile();
 
         Eigen::MatrixXd Timing_Manager;
 
@@ -57,6 +55,7 @@ namespace mpcSolver{
 
         // Constant parameters
         int N,S,D,M, footstepCounter;
+        int CountDown = -100;
         double singleSupportDuration, doubleSupportDuration, thetaMax;
         double footConstraintSquareWidth;
         double deltaXMax;
@@ -66,13 +65,16 @@ namespace mpcSolver{
         double controlTimeStep;
         double comTargetHeight;
         double omega;
-        double measuredComWeight = 0;
+        double measuredComWeight_x = 0.0;
+        double measuredComWeight_y = 0.0;
         double measuredZmpWeight = 0;
         double measuredComWeight_v_x = 0.4;
         double measuredComWeight_v_y = 0.4;
         bool trig_x = true;
         bool trig_y = true;
         double InitCom = 0;
+        int singlesupport = 1;
+        int doublesupport = 0;
 
         // Parameters for the current iteration
         bool supportFoot;
