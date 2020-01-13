@@ -2,6 +2,7 @@
 #include "utils.cpp"
 #include <iostream>
 #include <stdlib.h>
+//#include "dart/ArrowShape.hpp"
 
 using namespace std;
 
@@ -74,8 +75,9 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 
 	singleSupportDuration = 0.3;
 	doubleSupportDuration = 0.2;
+        bool activateTimingAdaptation = true;
 	solver = new mpcSolver::MPCSolver(0.05, mWorld->getTimeStep(), 1.0, comInitialPosition, CTH, singleSupportDuration, doubleSupportDuration, 0.30,
-			0.08, 0.3, 0.15, 0.3, 0.1, 0.0); //0.05, 0.2, 0.1, 0.15, 0.1, 0.0   0.05, 0.3, 0.13, 0.17, 0.1, 0.0
+			0.08, 0.25, 0.15, 0.25, 0.1, 0.0, activateTimingAdaptation); //0.05, 0.2, 0.1, 0.15, 0.1, 0.0   0.05, 0.3, 0.13, 0.17, 0.1, 0.0
 	/**/
         //ArmSwing();
 
@@ -91,11 +93,18 @@ void Controller::update()
         std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
 
 
-       if (mWorld->getSimFrames()>=400 && mWorld->getSimFrames()<=407){ mTorso->addExtForce(Eigen::Vector3d(320,0,0));
+       if (mWorld->getSimFrames()>=400 && mWorld->getSimFrames()<=407){ mTorso->addExtForce(Eigen::Vector3d(150,0,0)); //good push 150 walking on the spot
+       
+
+        //dart::dynamics::ArrowShape(Eigen::Vector3d::Zero(3),Eigen::Vector3d::Ones(3));
+        //check here how to do!!!
+        // https://github.com/dartsim/dart-examples/blob/master/.tutorials/tutorialMultiPendulum-Finished/tutorialMultiPendulum-Finished.cpp
+
+
         std::cout<< "PUSH" << std::endl;
 }
 
-      if (mWorld->getSimFrames()>=600 && mWorld->getSimFrames()<=607){ mTorso->addExtForce(Eigen::Vector3d(0,-150,0));
+      if (mWorld->getSimFrames()>=600 && mWorld->getSimFrames()<=607){ mTorso->addExtForce(Eigen::Vector3d(0,-120,0)); //good push -120 walking on the spot
         std::cout<< "PUSH" << std::endl;
 }
  /**/  
@@ -209,13 +218,18 @@ Eigen::VectorXd Controller::generateWalking(){
 
 	// Compute the CoM prediction using MPC
 	solver->solve(comCurrentPosition, comCurrentVelocity, comCurrentAcceleration, mSwingFoot->getTransform(mSupportFoot),
-			supportFoot, mWorld->getTime()-startWalk*(mWorld->getTimeStep()), 0.1, 0.0, 0.0); //max vel is 0.16, max omega is 0.1
+			supportFoot, mWorld->getTime()-startWalk*(mWorld->getTimeStep()), 0.1, 0.0, 0.0, 1); //max vel is 0.16, max omega is 0.1
+
+
+        //Update SS and DS durations accordin to the Timing_Manager
+        if (solver->Timing_Manager(0,1) == 1) singleSupportDuration = solver->Timing_Manager(0,2);
+        else singleSupportDuration = solver->Timing_Manager(3,2);
+
+        if (solver->Timing_Manager(0,1) == 0) doubleSupportDuration = solver->Timing_Manager(0,2);
+        else doubleSupportDuration = solver->Timing_Manager(1,2);
 
 	Eigen::Affine3d temp = mSwingFoot->getTransform(mSupportFoot);
 
-        // Example: accessing public properties of solver class        
-        //std::cout << solver->Timing_Manager<<std::endl;
-        //std::cout << solver->Timing_Manager(5,2)<<std::endl;
 
         // Filter DesposSwingFoot to avoid shaky foot motion
 
@@ -763,6 +777,7 @@ std::cout <<"CHEST_Y " << mRobot->getDof("CHEST_Y")->getIndexInSkeleton()<< std:
 
   Eigen::VectorXd q = mRobot->getPositions();
   std::cout <<q.size()<< std::endl;
+
 // Floating Base
   q[0] = 0.0;
   q[1] = 4*M_PI/180;
@@ -807,9 +822,9 @@ mRobot->setPosition(mRobot->getDof("L_ELBOW_P")->getIndexInSkeleton(), -25*M_PI/
 
 void Controller::ArmSwing() {
 
-
-mRobot->setPosition(mRobot->getDof("R_SHOULDER_P")->getIndexInSkeleton(), (4+10*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180 );
-mRobot->setPosition(mRobot->getDof("L_SHOULDER_P")->getIndexInSkeleton(), (4-10*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180  );
+// TO DO: add variable period to the swing trajecotry
+mRobot->setPosition(mRobot->getDof("R_SHOULDER_P")->getIndexInSkeleton(), (4+5*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180 );
+mRobot->setPosition(mRobot->getDof("L_SHOULDER_P")->getIndexInSkeleton(), (4-5*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180  );
 
 
 }
