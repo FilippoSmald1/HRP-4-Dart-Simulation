@@ -10,10 +10,10 @@ namespace mpcSolver{
 
     class MPCSolver{
 	public:
-        MPCSolver(double, double, double, Eigen::Vector3d, double, double, double, double, double, double, double, double, double, double);
+        MPCSolver(double, double, double, Eigen::Vector3d, double, double, double, double, double, double, double, double, double, double, bool);
 
         // Main method
-        void solve(Eigen::Vector3d, Eigen::Vector3d, Eigen::Vector3d, Eigen::Affine3d, bool, double, double, double, double);
+        void solve(Eigen::Vector3d, Eigen::Vector3d, Eigen::Vector3d, Eigen::Affine3d, bool, double, double, double, double, bool);
 
         // Get stuff
         Eigen::VectorXd getOptimalCoMPosition();
@@ -38,6 +38,7 @@ namespace mpcSolver{
         void genBalanceConstraint();
         void genFeasibilityConstraint();
         void genSwingFootConstraint(Eigen::Affine3d);
+        void genUsefulMatrices();
 
         // Solve
         void computeOrientations();
@@ -48,8 +49,6 @@ namespace mpcSolver{
         Eigen::Vector3d updateState(double,int,double);
         void changeReferenceFrame(Eigen::Affine3d);
 
-        // Log
-        void logToFile();
 
         Eigen::MatrixXd Timing_Manager;
 
@@ -57,6 +56,7 @@ namespace mpcSolver{
 
         // Constant parameters
         int N,S,D,M, footstepCounter;
+        int CountDown = -100;
         double singleSupportDuration, doubleSupportDuration, thetaMax;
         double footConstraintSquareWidth;
         double deltaXMax;
@@ -66,13 +66,19 @@ namespace mpcSolver{
         double controlTimeStep;
         double comTargetHeight;
         double omega;
-        double measuredComWeight = 0;
+        double measuredComWeight_x = 0.0;
+        double measuredComWeight_y = 0.0;
         double measuredZmpWeight = 0;
         double measuredComWeight_v_x = 0.4;
         double measuredComWeight_v_y = 0.4;
+        double w_x, w_y;
         bool trig_x = true;
         bool trig_y = true;
         double InitCom = 0;
+        int singlesupport = 1;
+        int doublesupport = 0;
+        bool activate_timing_adaptation;
+        double ss_d, ds_d;
 
         // Parameters for the current iteration
         bool supportFoot;
@@ -81,6 +87,17 @@ namespace mpcSolver{
         double vRefY=0;
         double omegaRef=0;
         int mpcIter,controlIter;
+
+        // useful matrices
+	Eigen::MatrixXd Icf;
+	Eigen::MatrixXd Ic;
+	Eigen::MatrixXd Cc;
+	Eigen::VectorXd Ccf;
+	Eigen::MatrixXd rCosZmp;
+	Eigen::MatrixXd rSinZmp;
+	Eigen::MatrixXd _rCosZmp;
+	Eigen::MatrixXd _rSinZmp;
+	Eigen::MatrixXd zmpRotationMatrix;
 
         // Matrices for prediction
         Eigen::VectorXd p;

@@ -2,6 +2,7 @@
 #include "utils.cpp"
 #include <iostream>
 #include <stdlib.h>
+//#include "dart/ArrowShape.hpp"
 
 using namespace std;
 
@@ -39,8 +40,7 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 
 
 
-	indInitial = startWalk + (int)((singleSupportDuration + doubleSupportDuration)/mWorld->getTimeStep());  //mWorld->getSimFrames()
-        
+	indInitial = startWalk + (int)((singleSupportDuration + doubleSupportDuration)/mWorld->getTimeStep());  
 
 
 
@@ -54,10 +54,10 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 	double comTargetHeight = 0.85; //1.1
         CTH = comTargetHeight;
 
-	//Balance
+	//Initialization measurements
 
 	balanceBasePos.resize(6);
-	balanceBasePos << getRPY(mBase, mSupportFoot), comInitialPosition;  //mBase, mSupportFoot
+	balanceBasePos << getRPY(mBase, mSupportFoot), comInitialPosition;  
 	balanceBasePos(5) = comTargetHeight;
         balanceBasePos(3) = mSupportFoot->getCOM(mSupportFoot)(0);
 	balanceFootPos.resize(6);
@@ -71,13 +71,18 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
         comInitialPosition(2) = CTH;
         
         PreviousOptCom << comInitialPosition(0),comInitialPosition(1),comInitialPosition(2);
-
+        stepHeight = 0.022;
 	singleSupportDuration = 0.3;
 	doubleSupportDuration = 0.2;
-	solver = new mpcSolver::MPCSolver(0.05, mWorld->getTimeStep(), 1.0, comInitialPosition, CTH, singleSupportDuration, doubleSupportDuration, 0.30,
-			0.08, 0.3, 0.15, 0.3, 0.1, 0.0); //0.05, 0.2, 0.1, 0.15, 0.1, 0.0   0.05, 0.3, 0.13, 0.17, 0.1, 0.0
+        bool activateTimingAdaptation = true;
+
+        // The following choice strongly simplifies the gait generation algorithm
+        double prediction_horizon = 2*(singleSupportDuration+doubleSupportDuration);
+
+	solver = new mpcSolver::MPCSolver(0.05, mWorld->getTimeStep(), prediction_horizon, comInitialPosition, CTH, singleSupportDuration, doubleSupportDuration, 0.30,
+			0.08, 0.25, 0.15, 0.25, 0.1, 0.0, activateTimingAdaptation); //0.05, 0.2, 0.1, 0.15, 0.1, 0.0   0.05, 0.3, 0.13, 0.17, 0.1, 0.0
 	/**/
-        //ArmSwing();
+
 
 }
 
@@ -91,11 +96,18 @@ void Controller::update()
         std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
 
 
-       if (mWorld->getSimFrames()>=400 && mWorld->getSimFrames()<=407){ mTorso->addExtForce(Eigen::Vector3d(320,0,0));
+       if (mWorld->getSimFrames()>=400 && mWorld->getSimFrames()<=407){ mTorso->addExtForce(Eigen::Vector3d(240,0,0)); //good push 150 walking on the spot     400-407
+       
+
+        //dart::dynamics::ArrowShape(Eigen::Vector3d::Zero(3),Eigen::Vector3d::Ones(3));
+        //check here how to do!!!
+        // https://github.com/dartsim/dart-examples/blob/master/.tutorials/tutorialMultiPendulum-Finished/tutorialMultiPendulum-Finished.cpp
+
+
         std::cout<< "PUSH" << std::endl;
 }
 
-      if (mWorld->getSimFrames()>=600 && mWorld->getSimFrames()<=607){ mTorso->addExtForce(Eigen::Vector3d(0,-150,0));
+      if (mWorld->getSimFrames()>=600 && mWorld->getSimFrames()<=607){ mTorso->addExtForce(Eigen::Vector3d(0,-200,0)); //good push -120 walking on the spot
         std::cout<< "PUSH" << std::endl;
 }
  /**/  
@@ -197,7 +209,7 @@ Eigen::VectorXd Controller::generateWalking(){
 	}
 
  
-
+       std::cout<<"sf " <<mSupportFoot->getCOM()<<std::endl;
 
 	Eigen::VectorXd actPosSwingFoot(6);
 	Eigen::VectorXd actPosBase(6);
@@ -209,13 +221,18 @@ Eigen::VectorXd Controller::generateWalking(){
 
 	// Compute the CoM prediction using MPC
 	solver->solve(comCurrentPosition, comCurrentVelocity, comCurrentAcceleration, mSwingFoot->getTransform(mSupportFoot),
-			supportFoot, mWorld->getTime()-startWalk*(mWorld->getTimeStep()), 0.1, 0.0, 0.0); //max vel is 0.16, max omega is 0.1
+			supportFoot, mWorld->getTime()-startWalk*(mWorld->getTimeStep()), 0.1, 0.0, 0.0, 1); //max vel is 0.16, max omega is 0.1
+
+
+        //Update SS and DS durations accordin to the Timing_Manager
+        if (solver->Timing_Manager(0,1) == 1) singleSupportDuration = solver->Timing_Manager(0,2);
+        else singleSupportDuration = solver->Timing_Manager(3,2);
+
+        if (solver->Timing_Manager(0,1) == 0) doubleSupportDuration = solver->Timing_Manager(0,2);
+        else doubleSupportDuration = solver->Timing_Manager(1,2);
 
 	Eigen::Affine3d temp = mSwingFoot->getTransform(mSupportFoot);
 
-        // Example: accessing public properties of solver class        
-        //std::cout << solver->Timing_Manager<<std::endl;
-        //std::cout << solver->Timing_Manager(5,2)<<std::endl;
 
         // Filter DesposSwingFoot to avoid shaky foot motion
 
@@ -242,10 +259,10 @@ if (!(solver->supportFootHasChanged())) {
         Eigen::VectorXd OptComPos(3);
         OptComPos << solver->getOptimalCoMPosition();
 
-
+        
 
 	Eigen::VectorXd desPosBase(6);
-	desPosBase << 0.0, 0.0, desPosSwingFoot(2)/2, OptComPos(0)+0*fdbk_x, OptComPos(1)+0*fdbk_y, OptComPos(2);  
+	desPosBase << 0.0, 0.0, desPosSwingFoot(2)/2, OptComPos(0), OptComPos(1), OptComPos(2);  
 
         PreviousOptCom = OptComPos;
 
@@ -286,7 +303,7 @@ if (mWorld->getSimFrames()==0){
 	Eigen::VectorXd desPosSwingFoot(6);
 
 	desPosSwingFoot = balanceFootPos;
-        desPosSwingFoot(4) = -0.2;
+        desPosSwingFoot(4) = -0.16;
 
 
 if (false) {
@@ -356,6 +373,10 @@ Eigen::VectorXd Controller::getJointVelocitiesQp(Eigen::VectorXd desider_pos_bas
 	double jointVelocitiesGain = 0.00000001;
         //jointVelocitiesGain = 0.001;
         jointVelocitiesGain = 0.0000000001;
+        jointVelocitiesGain = 0.00000000001;
+        jointVelocitiesGain = 0.000000000001;
+        //jointVelocitiesGain = 0.00000000000001;
+
 	double postureGain = 0;
 	Eigen::MatrixXd taskGain = Eigen::MatrixXd::Identity(12,12);
 
@@ -365,19 +386,19 @@ Eigen::VectorXd Controller::getJointVelocitiesQp(Eigen::VectorXd desider_pos_bas
 	taskGain(2,2) = 0;//0.001;
 
 	// CoM Position
-	taskGain(3,3) = 10;
-	taskGain(5,5) = 10;
-	taskGain(5,5) = 1;
+	taskGain(3,3) = 1; //10  
+	taskGain(5,5) = 1; //10  
+	taskGain(5,5) = 0.1;  //1  
 
 	// Swing Foot Orientation
-	taskGain(6,6) = 1;
-	taskGain(7,7) = 1;
+	taskGain(6,6) = 0.01;
+	taskGain(7,7) = 0.01;
 	taskGain(8,8) = 1;
 
 	// Swing Foot Position
-	taskGain(9,9) = 10;
-	taskGain(10,10) = 1;
-	taskGain(11,11) = 1;
+	taskGain(9,9) = 5;  //10 5
+	taskGain(10,10) = 1; //1  
+	taskGain(11,11) = 10; //1  
 
 	//std::cout << taskGain(4,4) << std::endl;
 
@@ -392,7 +413,7 @@ Eigen::VectorXd Controller::getJointVelocitiesQp(Eigen::VectorXd desider_pos_bas
 			postureGain*mWorld->getTimeStep()*mWorld->getTimeStep()*Eigen::MatrixXd::Identity(nVariables,nVariables) +
 			jointVelocitiesGain*Eigen::MatrixXd::Identity(nVariables,nVariables);
 
-	Eigen::VectorXd costFunctionF = mWorld->getTimeStep()*Jacobian_tot.transpose()*taskGain*(actual_pos - desired_pos) + postureGain*mWorld->getTimeStep()*(currentPosture - refPosture);
+	Eigen::VectorXd costFunctionF = mWorld->getTimeStep()*Jacobian_tot.transpose()*(taskGain*(actual_pos - desired_pos)) + postureGain*mWorld->getTimeStep()*(currentPosture - refPosture);
 
 
 	// Constraint RHipYawPitch and LHipYawPitch to be at the same angle
@@ -428,6 +449,9 @@ Eigen::VectorXd Controller::getJointVelocitiesQp(Eigen::VectorXd desider_pos_bas
 Eigen::VectorXd Controller::getJointVelocitiesStacked(Eigen::VectorXd desider_pos_base, Eigen::VectorXd actPosBase,
 		Eigen::VectorXd desider_pos_SwingFoot, Eigen::VectorXd actPosSwingFoot){
 
+        Eigen::VectorXd ComVref = Eigen::VectorXd::Zero(12);
+        ComVref<<0.0,0.0,0.0,solver->getOptimalCoMVelocity(), 0.0,0.0,0.0,0.0,0.0,0.0;
+
 	Eigen::VectorXd desired_pos(12);
 	desired_pos << desider_pos_base, desider_pos_SwingFoot;
 
@@ -439,8 +463,32 @@ Eigen::VectorXd Controller::getJointVelocitiesStacked(Eigen::VectorXd desider_po
 	Eigen::MatrixXd Jacobian_tot = getTorsoAndSwfJacobian();
 	Eigen::MatrixXd PseudoJacobian_tot = (Jacobian_tot.transpose())*(Jacobian_tot*Jacobian_tot.transpose()).inverse();
 
+	Eigen::MatrixXd _taskGain = Eigen::MatrixXd::Identity(12,12);
+
+	// Torso Orientation
+	_taskGain(0,0) = 0.001;
+	_taskGain(1,1) = 0.001;//0.001;
+	_taskGain(2,2) = 0;//0.001;
+
+	// CoM Position
+	_taskGain(3,3) = 1;  //0.1  10
+	_taskGain(5,5) = 1;
+	_taskGain(5,5) = 0.1;
+
+	// Swing Foot Orientation
+	_taskGain(6,6) = 10;
+	_taskGain(7,7) = 10;
+	_taskGain(8,8) = 10;
+
+	// Swing Foot Position
+	_taskGain(9,9) = 10;
+	_taskGain(10,10) = 10;
+	_taskGain(11,11) = 10;
+
+
+        ikGain = 1;
 	Eigen::VectorXd qDot(50);
-	qDot = PseudoJacobian_tot*(ikGain*(desired_pos - actual_pos));
+	qDot = PseudoJacobian_tot*(ComVref+ikGain*_taskGain*(desired_pos - actual_pos));
 
 	return qDot;
 }
@@ -763,6 +811,7 @@ std::cout <<"CHEST_Y " << mRobot->getDof("CHEST_Y")->getIndexInSkeleton()<< std:
 
   Eigen::VectorXd q = mRobot->getPositions();
   std::cout <<q.size()<< std::endl;
+
 // Floating Base
   q[0] = 0.0;
   q[1] = 4*M_PI/180;
@@ -807,9 +856,9 @@ mRobot->setPosition(mRobot->getDof("L_ELBOW_P")->getIndexInSkeleton(), -25*M_PI/
 
 void Controller::ArmSwing() {
 
-
-mRobot->setPosition(mRobot->getDof("R_SHOULDER_P")->getIndexInSkeleton(), (4+10*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180 );
-mRobot->setPosition(mRobot->getDof("L_SHOULDER_P")->getIndexInSkeleton(), (4-10*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180  );
+// TO DO: add variable period to the swing trajecotry
+mRobot->setPosition(mRobot->getDof("R_SHOULDER_P")->getIndexInSkeleton(), (4+5*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180 );
+mRobot->setPosition(mRobot->getDof("L_SHOULDER_P")->getIndexInSkeleton(), (4-5*sin(2*M_PI*0.01*(mWorld->getSimFrames())))*M_PI/180  );
 
 
 }

@@ -10,7 +10,7 @@ using namespace mpcSolver;
 
 MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predictionTime, Eigen::Vector3d initialComPosition,
                      double comTargetHeight, double singleSupportDuration, double doubleSupportDuration, double thetaMax,
-					 double footConstraintSquareWidth, double deltaXMax, double deltaYIn, double deltaYOut, double measuredComWeight, double measuredZmpWeight ){
+					 double footConstraintSquareWidth, double deltaXMax, double deltaYIn, double deltaYOut, double measuredComWeight, double measuredZmpWeight, bool _activate_timing_adaptation ){
 
 	// Set up parameters
 	this->mpcTimeStep = mpcTimeStep;
@@ -22,9 +22,9 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
 	this->deltaYOut = deltaYOut;
 	this->thetaMax = thetaMax;
 
-
+        
    
-
+    this->activate_timing_adaptation = _activate_timing_adaptation;
     this->comTargetHeight = comTargetHeight;
     
     this->omega=sqrt(9.81/(comTargetHeight));
@@ -33,8 +33,10 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     this->singleSupportDuration=singleSupportDuration;
     this->doubleSupportDuration=doubleSupportDuration;
 
-    this->measuredComWeight = measuredComWeight;
+    this->measuredComWeight_x = measuredComWeight;
     this->measuredZmpWeight = measuredZmpWeight;
+
+    measuredComWeight_y = measuredComWeight_x;
 
     N = round(predictionTime/mpcTimeStep);
     S = round(singleSupportDuration/mpcTimeStep);
@@ -45,10 +47,22 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
 
     // Timing Manager Initialization
     // The matrix is composed by threee columns with the following roles
-    // ->> timing shrink, gait phase, timing buffer
-
+    // ->> timing shrink, gait phase*, timing buffer
+    // * single support = 1, doublesupport = 0
     Timing_Manager = Eigen::MatrixXd::Zero(6,3);
     Timing_Manager << singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, 0, 1, 0, 0, 0, 0;
+
+
+    // Useful matrices
+    Icf = Eigen::MatrixXd::Zero(S+D,S+D);
+    Ic = Eigen::MatrixXd::Zero(N,N);
+    Cc = Eigen::MatrixXd::Zero(N,M);
+    Ccf = Eigen::VectorXd::Ones(S+D);
+    rCosZmp = Eigen::MatrixXd::Zero(N,N);
+    rSinZmp = Eigen::MatrixXd::Zero(N,N);
+    _rCosZmp = Eigen::MatrixXd::Zero(N,N);
+    _rSinZmp = Eigen::MatrixXd::Zero(N,N);
+    zmpRotationMatrix = Eigen::MatrixXd::Zero(2*N,2*N);
 
     // Matrices for cost function
     costFunctionH = Eigen::MatrixXd::Zero(2*(N+M),2*(N+M));
@@ -87,7 +101,7 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
         }
     }
 
-    // Matrices for CoM velocity prediction
+    // Matrices for CoM velocity prediction and LIP state update
     Vu = Eigen::MatrixXd::Zero(N,N);
     Vs = Eigen::MatrixXd::Zero(N,3);
 
@@ -123,10 +137,6 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     predictedOrientations = Eigen::VectorXd::Zero(M+1);
 
     // Initialize CoM, ZMP and predicted footstep
-
-
-
-
     comPos = initialComPosition;
     comPos(2) = comTargetHeight;
     comVel = Eigen::Vector3d::Zero(3);
@@ -137,80 +147,111 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     // Initialize footstep counter
     footstepCounter=0;
 
-    // Stuff for plotting
+    // A storage matrix
     predictedZmp = Eigen::MatrixXd::Zero(3,N);
 
 
 }
 
 void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredComVel, Eigen::Vector3d measuredComAcc,
-					  Eigen::Affine3d swingFootTransform, bool supportFoot, double simulationTime, double vRefX, double vRefY, double omegaRef){
+					  Eigen::Affine3d swingFootTransform, bool supportFoot, double simulationTime, double vRefX, double vRefY, double omegaRef, bool widgetReference){
 
     // Save iteration parameters
-    //this->vRefX = vRefX;
-    //this->vRefY = vRefY;
-    //this->omegaRef = omegaRef;
+
+if (!widgetReference) {
+    this->vRefX = vRefX;
+    this->vRefY = vRefY;
+    this->omegaRef = omegaRef;
+}
+
     this->supportFoot = supportFoot;
     this->simulationTime = simulationTime;
 
+    //std::cout<<Timing_Manager<<std::endl;
+
+
+
+
     // If new footstep is starting, change reference frame
     if(supportFootHasChanged()) changeReferenceFrame(swingFootTransform);
+    //if(Timing_Manager(5,0) == 1) changeReferenceFrame(swingFootTransform);
+  
+        // Uncomment to understand the performance of the kinematic controller:
+        // measCom and MPCCom (and measVel and comVel) should be almost the same, when no perturbations or reference velocity changes occur! 
+        std::cout <<"measCom " << measuredComPos <<std::endl;
+        std::cout <<"MPCCom " << comPos <<std::endl;
+        std::cout <<"measVel " << measuredComVel <<std::endl;
+        std::cout <<"comVel " << comVel <<std::endl;
+        std::cout<<"sim time " <<simulationTime << std::endl;
+/**/
 
     // Adjust the state based on measures
-    if(footstepCounter > 1) measuredComWeight = 0*0.1;
-    else measuredComWeight = 0;
-
+ 
     if (InitCom == 0){
 
-    measuredComWeight = 1;
+    measuredComWeight_x = 1;
+    measuredComWeight_y = 1;
     measuredComWeight_v_x = 0; 
     measuredComWeight_v_y = 0;
     measuredZmpWeight = 0.0;
+
+
+    InitCom = InitCom + 1;
+
 }else{
 
     if(footstepCounter > 1){ 
 
-    // DCM check 
-    if (pow((measuredComPos(0) +  measuredComVel(0)/omega)-(comPos(0)+comVel(0)/omega),2)>0.001 && trig_x){
-        measuredComWeight = 0.8;    
-        measuredComWeight_v_x = 1+0*0.8;
-        //trig_x = false;
-        //int v = getchar();
-    }else measuredComWeight_v_x = 0;
+    // Position check 
+    if (simulationTime > 4.00 && simulationTime <= 4.07){ //>0.0005
+/*
+        Timing_Manager(0,0) = 0.1;
+        Timing_Manager(0,2) = 0.17;
+        // ACTIVATE COUNTDOWN TO COME BACK TO USUAL TIMING!!!!
+/**/        
+        comVel(0) = comVel(0) + 0.01*5.5;
+        measuredComWeight_x = 0.9;    
+        measuredComWeight_v_x = 1;
 
-    if (pow((measuredComPos(1) +  measuredComVel(1)/omega)-(comPos(1)+comVel(1)/omega),2)>0.001 && trig_y) {
-         measuredComWeight = 0.8;  
-         measuredComWeight_v_y = 1+0*0.8;
-        //trig_y = false;
-        //int c = getchar();
- }   else{ measuredComWeight_v_y = 0;
+    }else{ 
 
-    measuredComWeight = 0;
+    measuredComWeight_v_x = 0;
+    measuredComWeight_x = 0;
 }
+    if (simulationTime > 6.00 && simulationTime <= 6.07) {//>0.001
 
+/*
+        Timing_Manager(0,0) = 0.1;
+        Timing_Manager(0,2) = 0.17;
+        // ACTIVATE COUNTDOWN TO COME BACK TO USUAL TIMING!!!!
+/**/
+        comVel(1) = comVel(1) - 0.01*5.5;
+        measuredComWeight_y = 0.9;  
+        measuredComWeight_v_y = 1;
+
+ }   else{ 
+
+    measuredComWeight_v_y = 0;
+    measuredComWeight_y = 0;
+}
     measuredZmpWeight = 0.0;
 
    
 }else{ 
 
-    measuredComWeight = 0.0;
+    measuredComWeight_x = 0.0;
+    measuredComWeight_y = 0.0;
     measuredComWeight_v_x = 0; 
     measuredComWeight_v_y = 0;
     measuredZmpWeight = 0.0;
 
 }
+
 }
-     
-    InitCom = InitCom + 1;
-
-        std::cout <<"measCom " << measuredComPos <<std::endl;
-        std::cout <<"MPCCom " << comPos <<std::endl;
-        std::cout <<"measVel " << measuredComVel <<std::endl;
-        std::cout <<"comVel " << comVel <<std::endl;
-
-
-    comPos(0) = (1-measuredComWeight)*comPos(0) + measuredComWeight*measuredComPos(0);
-    comPos(1) = (1-measuredComWeight)*comPos(1) + measuredComWeight*measuredComPos(1);
+ 
+/*    
+    comPos(0) = (1-measuredComWeight_x)*comPos(0) + measuredComWeight_x*measuredComPos(0);
+    comPos(1) = (1-measuredComWeight_y)*comPos(1) + measuredComWeight_y*measuredComPos(1);
 
     comVel(0) = (1-measuredComWeight_v_x)*comVel(0) + measuredComWeight_v_x*measuredComVel(0);
     comVel(1) = (1-measuredComWeight_v_y)*comVel(1) + measuredComWeight_v_y*measuredComVel(1);
@@ -219,15 +260,20 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     zmpPos(0) = (1-measuredZmpWeight)*zmpPos(0) + measuredZmpWeight*measuredZmpPos(0);
     zmpPos(1) = (1-measuredZmpWeight)*zmpPos(1) + measuredZmpWeight*measuredZmpPos(1);
 
+/**/
+
+
+
 
 
            
 
-  
 
+    // Compute matrices to be used
+    computeOrientations();
 
     // Compute footsteps orientations
-    computeOrientations();
+    genUsefulMatrices();
 
     // Compute the cost function
     genCostFunction();
@@ -236,13 +282,14 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     genStabilityConstraint();
     genBalanceConstraint();
     genFeasibilityConstraint();
-    genSwingFootConstraint(swingFootTransform);
+
 
     // Stack the matrices for the constraints
     // If both feet are on the floor also add the swing foot constraint
 
     if (false) { //(footstepCounter == 0 || mpcIter >= 0)
     	int nConstraints = Aeq.rows() + AFootsteps.rows() + AZmp.rows() + ASwingFoot.rows();
+        genSwingFootConstraint(swingFootTransform);
     	AConstraint.resize(nConstraints, 2*(N+M));
     	bConstraintMin.resize(nConstraints);
     	bConstraintMax.resize(nConstraints);
@@ -289,22 +336,77 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     zmpPos << nextStateX(2),nextStateY(2),0.0;
     predictedFootstep << footstepsOptimalX(0),footstepsOptimalY(0),0.0,predictedOrientations(1);
 
-    logToFile();
 
     ++controlIter;
+
+
     mpcIter = floor(controlIter*controlTimeStep/mpcTimeStep);
-    if(mpcIter>=S+D){
+
+
+  // Timing manager update
+     if (Timing_Manager(0,0)-controlTimeStep >= 0.0) {
+
+         Timing_Manager(0,0) = Timing_Manager(0,0) - controlTimeStep;
+         Timing_Manager(4,0) = Timing_Manager(4,0) + controlTimeStep;
+         Timing_Manager(4,2) = Timing_Manager(0,2);
+         Timing_Manager(4,1) = Timing_Manager(0,1);
+         Timing_Manager(5,0) = 0;
+
+     }else{
+         
+        trig_y = true;
+        trig_x = true;
+
+     if (Timing_Manager(4,1) == doublesupport) Timing_Manager(5,0) = 1;
+
+        Eigen::MatrixXd line = Eigen::MatrixXd::Zero(1,3);
+        line << 0, 1, 0;
+        Timing_Manager.block(0,0,1,3) = Timing_Manager.block(1,0,1,3);
+        Timing_Manager.block(1,0,1,3) = Timing_Manager.block(2,0,1,3);
+        Timing_Manager.block(2,0,1,3) = Timing_Manager.block(3,0,1,3);
+        Timing_Manager.block(3,0,1,3) = Timing_Manager.block(4,0,1,3);
+        Timing_Manager(3,0) = Timing_Manager(3,0) + controlTimeStep; 
+        Timing_Manager.block(4,0,1,3) = line;
+     }
+
+    // Updating countdown of adapted step
+    if (CountDown != -100){
+
+    if (CountDown -1 == 2){
+    // Reset timing manager matrix, with footstep change (since the adapted step has been performed)
+    Timing_Manager << singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, 0, 1, 0, 1, 0, 0; 
+    CountDown = -100;
+    }else CountDown = CountDown-1;
+
+    }
+
+
+
+if(activate_timing_adaptation){
+    if(Timing_Manager(5,0)==1){
+        trig_y = true;
+        trig_x = true;
     	controlIter = 0;
     	mpcIter = 0;
         footstepCounter++;
-        //InitCom = 0;
     }
+}else{
+    if(mpcIter>=S+D){ 
+        trig_y = true;
+        trig_x = true;
+    	controlIter = 0;
+    	mpcIter = 0;
+        footstepCounter++;
+    }
+
+}
+
+  
+
 
     std::cout << "Iteration " << controlIter << " Footstep " << footstepCounter << std::endl;
 }
 
-void MPCSolver::logToFile() {
-}
 
 void MPCSolver::changeReferenceFrame(Eigen::Affine3d swingFootTransform) {
 
@@ -351,16 +453,211 @@ void MPCSolver::genSwingFootConstraint(Eigen::Affine3d swingFootTransform) {
 	int sign = 1;
 	if (footstepCounter%2 == 0) sign = -1;
 
-	bSwingFoot(0) = step;//predictedFootstep(0);//swingFootPos(0);
+	bSwingFoot(0) = 0*step;//predictedFootstep(0);//swingFootPos(0);
 	bSwingFoot(1) = sign*0.15;//predictedFootstep(1);//swingFootPos(1);
-	bSwingFoot(2) = 2*step;
+	bSwingFoot(2) = 0*2*step;
 	bSwingFoot(3) = 0;
 }
+
+void MPCSolver::genUsefulMatrices() {
+
+
+	for(int i=0;i<S;++i){
+		Icf(i,i)=1;
+	}
+
+        int S_1,D_1,S_2,D_2,S_3,D_3;
+
+if(activate_timing_adaptation){
+
+        // With timing adaptation        
+
+        if (Timing_Manager(0,1)==singlesupport){
+
+            // First predicted step (actually performed)
+            S_1 = round(Timing_Manager(0,2)/mpcTimeStep);
+            D_1 = round(Timing_Manager(1,2)/mpcTimeStep);
+            // Second predicted step
+            S_2 = round(Timing_Manager(2,2)/mpcTimeStep);
+            D_2 = round(Timing_Manager(3,2)/mpcTimeStep);
+            // Third predicted step (a part)
+            S_3 = mpcIter; //round(Timing_Manager(4,0)/mpcTimeStep)
+
+
+            if (S_1+D_1+S_2+D_2+S_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) S_1 = S_1-1;
+            //if (S_1+D_1+S_2+D_2+S_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) S_3 = S_3-1;
+            if (S_1+D_1+S_2+D_2+S_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) S_1 = S_1+1;
+            //if (S_1+D_1+S_2+D_2+S_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) S_3 = S_3+1;
+
+
+            Ic.block(0,0,S_1-mpcIter,S_1-mpcIter) = Eigen::MatrixXd::Identity(S_1-mpcIter,S_1-mpcIter);
+            Ic.block(S_1-mpcIter,S_1-mpcIter,D_1,D_1) = Eigen::MatrixXd::Zero(D_1,D_1);
+            Ic.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2,S_2) = Eigen::MatrixXd::Identity(S_2,S_2);
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = Eigen::MatrixXd::Zero(D_2,D_2);
+
+            if (mpcIter>0) Ic.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter);
+
+
+            rCosZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Identity(S_1+D_1-mpcIter,S_1+D_1-mpcIter); //S_1+D_1-mpcIter
+	    rSinZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+
+            rCosZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*cos(predictedOrientations(1));
+	    rSinZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*sin(predictedOrientations(1));
+
+            if(mpcIter>0){
+            rCosZmp.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*cos(predictedOrientations(2));
+	    rSinZmp.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*sin(predictedOrientations(2));
+            }
+
+
+        }else{
+
+            // First predicted step (actually performed)   
+            D_1 = round(Timing_Manager(0,2)/mpcTimeStep);
+            // Second predicted step
+            S_1 = round(Timing_Manager(3,2)/mpcTimeStep);
+            D_2 = round(Timing_Manager(2,2)/mpcTimeStep);
+            // Third predicted step
+            S_2 = round(Timing_Manager(1,2)/mpcTimeStep);
+            D_3 = round(Timing_Manager(5,2)/mpcTimeStep);
+            
+            if (S_2+D_3>mpcIter) D_3 = D_3-1;
+            if (S_2+D_3<mpcIter) D_3 = D_3+1;
+  
+            if (floor(Timing_Manager(4,0)/mpcTimeStep) == 0){
+            D_3 = 0;
+            D_1 = ceil(Timing_Manager(0,0)/mpcTimeStep);
+            }
+
+            if (S_1+D_1+S_2+D_2+D_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) D_1 = D_1-1;
+            //if (S_1+D_1+S_2+D_2+D_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) D_3 = D_3-1;
+            if (S_1+D_1+S_2+D_2+D_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) D_1 = D_1+1;
+            //if (S_1+D_1+S_2+D_2+D_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) D_3 = D_3+1;
+
+
+            std::cout<<"S_1 "<<S_1<<std::endl;
+            std::cout<<"D_1 "<<D_1<<std::endl;
+            std::cout<<"S_2 "<<S_2<<std::endl;
+            std::cout<<"D_2 "<<D_2<<std::endl;
+            std::cout<<"mpcIter "<<mpcIter<<std::endl;
+       std::cout<<"TM"<<std::endl;
+        std::cout<<Timing_Manager<<std::endl;
+
+            Ic.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+            Ic.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2,S_2) = Eigen::MatrixXd::Identity(S_2,S_2);
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = Eigen::MatrixXd::Zero(D_2,D_2);
+
+
+            if (mpcIter-S_1<=0){
+
+            Ic.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter);
+
+            }else{ 
+            Ic.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,S_1,S_1) = Eigen::MatrixXd::Identity(S_1,S_1);
+            Ic.block(D_1+2*S_1+D_2+S_2-mpcIter,D_1+2*S_1+D_2+S_2-mpcIter,mpcIter-S_1,mpcIter-S_1) =                  Eigen::MatrixXd::Zero(mpcIter-S_1,mpcIter-S_1);}
+
+            rCosZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Identity(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+	    rSinZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+
+            rCosZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*cos(predictedOrientations(1));
+	    rSinZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*sin(predictedOrientations(1));
+
+            rCosZmp.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*cos(predictedOrientations(2));
+	    rSinZmp.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*sin(predictedOrientations(2));
+
+        }
+
+        // Don't plan to move for the first step
+	if((int)simulationTime/mpcTimeStep<S+D){
+		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
+	}
+
+
+	Eigen::MatrixXd Cc_ = Eigen::MatrixXd::Zero(N,M);
+        Cc = Cc_;
+
+
+        if (Timing_Manager(0,1) == singlesupport){
+        // Single support
+  
+        if(Timing_Manager(4,1)==doublesupport && Timing_Manager(4,0) == 0){//Timing_Manager(5,0)==1
+        Cc_.block(0,0,N/2,1) = Eigen::VectorXd::Ones(N/2);
+        Cc_.block(N/2,1,N/2,1) = Eigen::VectorXd::Ones(N/2);
+        }else{
+
+        Cc_.block(S_1+D_1-mpcIter,0,S_2+D_2,1) = Eigen::VectorXd::Ones(S_2+D_2);
+
+        if(N-(S_1+D_1+S_2+D_2-mpcIter)>0) Cc_.block(S_1+D_1+S_2+D_2-mpcIter,1,mpcIter,1) = Eigen::VectorXd::Ones(mpcIter);
+        }
+
+        }else{
+        // Double support
+        Cc_.block(S_1+D_1-mpcIter,0,S_2+D_2,1) = Eigen::VectorXd::Ones(S_2+D_2);
+        Cc_.block(S_1+D_1+S_2+D_2-mpcIter,1,mpcIter,1) = Eigen::VectorXd::Ones(mpcIter);
+        }
+
+        
+        Cc = Cc_;
+
+
+	zmpRotationMatrix << rCosZmp,rSinZmp,
+						-rSinZmp,rCosZmp;
+/*
+       Eigen::MatrixXd  __Ic = Eigen::MatrixXd::Zero(N,N);
+       __Ic = Ic;
+/**/
+}else{  
+        // No timing adaptation
+
+
+	if((int)simulationTime/mpcTimeStep<S+D){
+		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
+	}
+	else{
+		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Icf.block(mpcIter,mpcIter,S+D-mpcIter,S+D-mpcIter);
+	}
+
+	for(int i=0; i<M-1; ++i){
+		Ic.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Icf;
+	}
+
+	Ic.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Icf.block(0,0,mpcIter,mpcIter);
+
+
+
+	for(int i=0; i<M-1; ++i){
+		Cc.block(S+D-mpcIter+(i*(S+D)),i,S+D,1) = Ccf;
+	}
+
+	Cc.block(S+D-mpcIter+((M-1)*(S+D)),M-1,mpcIter,1) = Ccf.block(0,0,mpcIter,1);
+
+
+	rCosZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Identity(S+D-mpcIter,S+D-mpcIter);
+	rSinZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
+
+	for(int i=0; i<M-1; ++i){
+		rCosZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*cos(predictedOrientations(i+1));
+		rSinZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*sin(predictedOrientations(i+1));
+	}
+
+	rCosZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*cos(predictedOrientations(M));
+	rSinZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*sin(predictedOrientations(M));
+
+
+	zmpRotationMatrix << rCosZmp,rSinZmp,
+						-rSinZmp,rCosZmp;
+
+ }       
+        
+
+}
+
 
 void MPCSolver::genCostFunction() {
 	//qVx = 0;
 	//qVy = 0;
 
+/*
 	Eigen::MatrixXd Cc = Eigen::MatrixXd::Zero(N,M);
 	Eigen::VectorXd Ccf = Eigen::VectorXd::Ones(S+D);
 
@@ -369,6 +666,7 @@ void MPCSolver::genCostFunction() {
 	}
 
 	Cc.block(S+D-mpcIter+((M-1)*(S+D)),M-1,mpcIter,1) = Ccf.block(0,0,mpcIter,1);
+/**/
 
 	costFunctionH.block(0,0,N,N) = qZd*Eigen::MatrixXd::Identity(N,N) + qVx*Vu.transpose()*Vu + qZ*P.transpose()*P;
 	costFunctionH.block(N+M,N+M,N,N) = qZd*Eigen::MatrixXd::Identity(N,N) + qVy*Vu.transpose()*Vu + qZ*P.transpose()*P;
@@ -406,15 +704,30 @@ void MPCSolver::genCostFunction() {
 
 void MPCSolver::computeOrientations() {
 
+
 	// Difference matrix (theta_j - theta_{j-1})
 	Eigen::MatrixXd differenceMatrix = Eigen::MatrixXd::Identity(M,M);
 	for (int i=0; i<M-1; ++i) {
 		differenceMatrix(i+1,i) = -1;
 	}
+        
+        ss_d = singleSupportDuration;
+        ds_d = doubleSupportDuration;
+
+
+ /*
+        if(Timing_Manager(0,1) = singlesupport){
+        ss_d = Timing_Manager(0,2);
+        ds_d = Timing_Manager(1,2);
+        } else {
+        ss_d = Timing_Manager(3,2);
+        ds_d = Timing_Manager(0,2);
+        }
+/**/
 
 	// Rotation cost function
 	Eigen::MatrixXd footstepsH = (differenceMatrix.transpose()*differenceMatrix);
-	Eigen::VectorXd footstepsF = -omegaRef*(singleSupportDuration+doubleSupportDuration)*differenceMatrix.transpose()*Eigen::VectorXd::Ones(M);
+	Eigen::VectorXd footstepsF = -omegaRef*(ss_d+ds_d)*differenceMatrix.transpose()*Eigen::VectorXd::Ones(M);
 
 	// Constraint on maximum variation of orientation
 	Eigen::MatrixXd AOrientations = differenceMatrix;
@@ -480,54 +793,10 @@ void MPCSolver::computeOrientations() {
 }
 
 void MPCSolver::genBalanceConstraint(){
+
 	AZmp.setZero();
 
-	Eigen::MatrixXd Icf = Eigen::MatrixXd::Zero(S+D,S+D);
-	Eigen::MatrixXd Ic = Eigen::MatrixXd::Zero(N,N);
-	Eigen::MatrixXd Cc = Eigen::MatrixXd::Zero(N,M);
-	Eigen::VectorXd Ccf = Eigen::VectorXd::Ones(S+D);
-
-	for(int i=0;i<S;++i){
-		Icf(i,i)=1;
-	}
-
-	if((int)simulationTime/mpcTimeStep<S+D){
-		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
-	}
-	else{
-		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Icf.block(mpcIter,mpcIter,S+D-mpcIter,S+D-mpcIter);
-	}
-
-	for(int i=0; i<M-1; ++i){
-		Ic.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Icf;
-	}
-
-	Ic.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Icf.block(0,0,mpcIter,mpcIter);
-
-	for(int i=0; i<M-1; ++i){
-		Cc.block(S+D-mpcIter+(i*(S+D)),i,S+D,1) = Ccf;
-	}
-
-	Cc.block(S+D-mpcIter+((M-1)*(S+D)),M-1,mpcIter,1) = Ccf.block(0,0,mpcIter,1);
-
-	Eigen::MatrixXd rCosZmp = Eigen::MatrixXd::Zero(N,N);
-	Eigen::MatrixXd rSinZmp = Eigen::MatrixXd::Zero(N,N);
-
-	rCosZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Identity(S+D-mpcIter,S+D-mpcIter);
-	rSinZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
-
-	for(int i=0; i<M-1; ++i){
-		rCosZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*cos(predictedOrientations(i+1));
-		rSinZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*sin(predictedOrientations(i+1));
-	}
-
-	rCosZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*cos(predictedOrientations(M));
-	rSinZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*sin(predictedOrientations(M));
-
-	Eigen::MatrixXd zmpRotationMatrix(2*N,2*N);
-	zmpRotationMatrix << rCosZmp,rSinZmp,
-						-rSinZmp,rCosZmp;
-
+        // Build constraint matrices for the QP
 	AZmp.block(0,0,N,N) = Ic*P;
 	AZmp.block(0,N,N,M) = -Ic*Cc;
 	AZmp.block(N,N+M,N,N) = Ic*P;
@@ -538,15 +807,14 @@ void MPCSolver::genBalanceConstraint(){
 	Eigen::VectorXd bZmpLeftTerm = Eigen::VectorXd::Zero(2*N);
 	Eigen::VectorXd bZmpRightTerm = Eigen::VectorXd::Zero(2*N);
 
-	bZmpLeftTerm << Ic*p*(footConstraintSquareWidth/2-0*0.0153-0.0193), Ic*p*(footConstraintSquareWidth/2-0*0.0153-0.0193);
+	bZmpLeftTerm << Ic*p*(footConstraintSquareWidth/2), Ic*p*(footConstraintSquareWidth/2);
 
 	bZmpRightTerm << Ic*p*zmpPos(0), Ic*p*zmpPos(1);
 	bZmpRightTerm = zmpRotationMatrix * bZmpRightTerm;
 
 	bZmpMax =   bZmpLeftTerm - bZmpRightTerm;
 	bZmpMin = - bZmpLeftTerm - bZmpRightTerm;
-
-
+        // Add here constraint restriction if needed!
 }
 
 void MPCSolver::genFeasibilityConstraint(){
