@@ -10,7 +10,7 @@ using namespace mpcSolver;
 
 MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predictionTime, Eigen::Vector3d initialComPosition,
                      double comTargetHeight, double singleSupportDuration, double doubleSupportDuration, double thetaMax,
-					 double footConstraintSquareWidth, double deltaXMax, double deltaYIn, double deltaYOut, double measuredComWeight, double measuredZmpWeight ){
+					 double footConstraintSquareWidth, double deltaXMax, double deltaYIn, double deltaYOut, double measuredComWeight, double measuredZmpWeight, bool _activate_timing_adaptation ){
 
 	// Set up parameters
 	this->mpcTimeStep = mpcTimeStep;
@@ -22,9 +22,9 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
 	this->deltaYOut = deltaYOut;
 	this->thetaMax = thetaMax;
 
-
+        
    
-
+    this->activate_timing_adaptation = _activate_timing_adaptation;
     this->comTargetHeight = comTargetHeight;
     
     this->omega=sqrt(9.81/(comTargetHeight));
@@ -33,8 +33,10 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     this->singleSupportDuration=singleSupportDuration;
     this->doubleSupportDuration=doubleSupportDuration;
 
-    this->measuredComWeight = measuredComWeight;
+    this->measuredComWeight_x = measuredComWeight;
     this->measuredZmpWeight = measuredZmpWeight;
+
+    measuredComWeight_y = measuredComWeight_x;
 
     N = round(predictionTime/mpcTimeStep);
     S = round(singleSupportDuration/mpcTimeStep);
@@ -43,12 +45,26 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     mpcIter = 0;
     controlIter = 0;
 
+    d = footConstraintSquareWidth;
+
     // Timing Manager Initialization
     // The matrix is composed by threee columns with the following roles
-    // ->> timing shrink, gait phase, timing buffer
-
+    // ->> timing shrink, gait phase*, timing buffer
+    // * single support = 1, doublesupport = 0
     Timing_Manager = Eigen::MatrixXd::Zero(6,3);
     Timing_Manager << singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, 0, 1, 0, 0, 0, 0;
+
+
+    // Useful matrices
+    Icf = Eigen::MatrixXd::Zero(S+D,S+D);
+    Ic = Eigen::MatrixXd::Zero(N,N);
+    Cc = Eigen::MatrixXd::Zero(N,M);
+    Ccf = Eigen::VectorXd::Ones(S+D);
+    rCosZmp = Eigen::MatrixXd::Zero(N,N);
+    rSinZmp = Eigen::MatrixXd::Zero(N,N);
+    _rCosZmp = Eigen::MatrixXd::Zero(N,N);
+    _rSinZmp = Eigen::MatrixXd::Zero(N,N);
+    zmpRotationMatrix = Eigen::MatrixXd::Zero(2*N,2*N);
 
     // Matrices for cost function
     costFunctionH = Eigen::MatrixXd::Zero(2*(N+M),2*(N+M));
@@ -87,7 +103,7 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
         }
     }
 
-    // Matrices for CoM velocity prediction
+    // Matrices for CoM velocity prediction and LIP state update
     Vu = Eigen::MatrixXd::Zero(N,N);
     Vs = Eigen::MatrixXd::Zero(N,3);
 
@@ -102,6 +118,10 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     Eigen::RowVectorXd Vu_newline(N);
     Eigen::RowVectorXd Vs_newline(3);
     Eigen::RowVectorXd A_midLine(3);
+
+    A_timing = Eigen::MatrixXd::Zero(3,1);
+    b_timing_max = Eigen::VectorXd::Zero(3);
+    b_timing_min = Eigen::VectorXd::Zero(3);
 
     A_midLine<<omega*sh,ch,-omega*sh;
 
@@ -123,10 +143,6 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     predictedOrientations = Eigen::VectorXd::Zero(M+1);
 
     // Initialize CoM, ZMP and predicted footstep
-
-
-
-
     comPos = initialComPosition;
     comPos(2) = comTargetHeight;
     comVel = Eigen::Vector3d::Zero(3);
@@ -137,80 +153,105 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     // Initialize footstep counter
     footstepCounter=0;
 
-    // Stuff for plotting
+    // A storage matrix
     predictedZmp = Eigen::MatrixXd::Zero(3,N);
+
+
+    for (double i=N; i<2*N; i++) TailIntegral = TailIntegral + exp(-omega*i*mpcTimeStep);
+
+    TailIntegral = omega*mpcTimeStep*TailIntegral;
+
+    zDotOptimalX = Eigen::VectorXd::Zero(N);
+    zDotOptimalY = Eigen::VectorXd::Zero(N);
+    footstepsOptimalX = Eigen::VectorXd::Zero(M);
+    footstepsOptimalY = Eigen::VectorXd::Zero(M);
 
 
 }
 
 void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredComVel, Eigen::Vector3d measuredComAcc,
-					  Eigen::Affine3d swingFootTransform, bool supportFoot, double simulationTime, double vRefX, double vRefY, double omegaRef){
+					  Eigen::Affine3d swingFootTransform, bool supportFoot, double simulationTime, double vRefX, double vRefY, double omegaRef, bool widgetReference){
 
     // Save iteration parameters
-    //this->vRefX = vRefX;
-    //this->vRefY = vRefY;
-    //this->omegaRef = omegaRef;
+
+    this->widgetReference = widgetReference;
+if (widgetReference==false) {
+    this->v_x = vRefX;
+    this->v_y = vRefY;
+    this->v_th = omegaRef;
+}
+
     this->supportFoot = supportFoot;
     this->simulationTime = simulationTime;
 
+    //std::cout<<Timing_Manager<<std::endl;
+
+
+
+
     // If new footstep is starting, change reference frame
     if(supportFootHasChanged()) changeReferenceFrame(swingFootTransform);
+    //if(Timing_Manager(5,0) == 1) changeReferenceFrame(swingFootTransform);
+ 
+ /*
+        // Uncomment to understand the performance of the kinematic controller:
+        // measCom and MPCCom (and measVel and comVel) should be almost the same, when no perturbations or reference velocity changes occur! 
+        std::cout <<"Com tracking error" << std::endl;
+        std::cout<< measuredComPos - comPos<<std::endl;
+        std::cout <<"Com velocity tracking error" << std::endl;
+        std::cout<< measuredComVel - comVel<<std::endl;
+        std::cout<<"sim time " <<simulationTime << std::endl;
+
+/**/
 
     // Adjust the state based on measures
-    if(footstepCounter > 1) measuredComWeight = 0*0.1;
-    else measuredComWeight = 0;
+ 
+    push = Eigen::VectorXd::Zero(3);
 
     if (InitCom == 0){
 
-    measuredComWeight = 1;
-    measuredComWeight_v_x = 0; 
-    measuredComWeight_v_y = 0;
-    measuredZmpWeight = 0.0;
-}else{
-
-    if(footstepCounter > 1){ 
-
-    // DCM check 
-    if (pow((measuredComPos(0) +  measuredComVel(0)/omega)-(comPos(0)+comVel(0)/omega),2)>0.001 && trig_x){
-        measuredComWeight = 0.8;    
-        measuredComWeight_v_x = 1+0*0.8;
-        //trig_x = false;
-        //int v = getchar();
-    }else measuredComWeight_v_x = 0;
-
-    if (pow((measuredComPos(1) +  measuredComVel(1)/omega)-(comPos(1)+comVel(1)/omega),2)>0.001 && trig_y) {
-         measuredComWeight = 0.8;  
-         measuredComWeight_v_y = 1+0*0.8;
-        //trig_y = false;
-        //int c = getchar();
- }   else{ measuredComWeight_v_y = 0;
-
-    measuredComWeight = 0;
-}
-
-    measuredZmpWeight = 0.0;
-
-   
-}else{ 
-
-    measuredComWeight = 0.0;
+    measuredComWeight_x = 1;
+    measuredComWeight_y = 1;
     measuredComWeight_v_x = 0; 
     measuredComWeight_v_y = 0;
     measuredZmpWeight = 0.0;
 
-}
-}
-     
+
     InitCom = InitCom + 1;
 
-        std::cout <<"measCom " << measuredComPos <<std::endl;
-        std::cout <<"MPCCom " << comPos <<std::endl;
-        std::cout <<"measVel " << measuredComVel <<std::endl;
-        std::cout <<"comVel " << comVel <<std::endl;
+}else{
+
+    if(footstepCounter > 1 ){ 
+
+    // Position check 
+    if (footstepCounter == 6 && controlIter > 1 && controlIter <= 7 ){ 
+        
+        comVel(0) = comVel(0) + 0.01*6.5;
+        push<< 6.5*40,0.0,0.0; 
+
+    }
 
 
-    comPos(0) = (1-measuredComWeight)*comPos(0) + measuredComWeight*measuredComPos(0);
-    comPos(1) = (1-measuredComWeight)*comPos(1) + measuredComWeight*measuredComPos(1);
+    if (footstepCounter == 8 && controlIter > 1 && controlIter <= 7 ){ 
+
+        comVel(1) = comVel(1) - 0.01*5.5; //0.01*5.5
+        push<< 0.0,-5*40,0.0; 
+    }
+
+    if (footstepCounter == 15 && controlIter > 1 && controlIter <= 7 ){ 
+
+        comVel(0) = comVel(0) + 0.01*5;
+        comVel(1) = comVel(1) + 0.01*5; //0.01*5.5
+        push<< 5*40,5*40,0.0; 
+    }
+
+}
+
+}
+ 
+/*    
+    comPos(0) = (1-measuredComWeight_x)*comPos(0) + measuredComWeight_x*measuredComPos(0);
+    comPos(1) = (1-measuredComWeight_y)*comPos(1) + measuredComWeight_y*measuredComPos(1);
 
     comVel(0) = (1-measuredComWeight_v_x)*comVel(0) + measuredComWeight_v_x*measuredComVel(0);
     comVel(1) = (1-measuredComWeight_v_y)*comVel(1) + measuredComWeight_v_y*measuredComVel(1);
@@ -219,12 +260,18 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     zmpPos(0) = (1-measuredZmpWeight)*zmpPos(0) + measuredZmpWeight*measuredZmpPos(0);
     zmpPos(1) = (1-measuredZmpWeight)*zmpPos(1) + measuredZmpWeight*measuredZmpPos(1);
 
+/**/
 
+    // Timing adaptation
+    ComputeFeasibilityRegion();
 
-           
+    if(activate_timing_adaptation==true){ 
+    //TimingAdaptation_euristics();
+    TimingAdaptation();
+    }
 
-  
-
+    // Compute matrices to be used
+    genUsefulMatrices();
 
     // Compute footsteps orientations
     computeOrientations();
@@ -236,13 +283,14 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     genStabilityConstraint();
     genBalanceConstraint();
     genFeasibilityConstraint();
-    genSwingFootConstraint(swingFootTransform);
+
 
     // Stack the matrices for the constraints
     // If both feet are on the floor also add the swing foot constraint
 
     if (false) { //(footstepCounter == 0 || mpcIter >= 0)
     	int nConstraints = Aeq.rows() + AFootsteps.rows() + AZmp.rows() + ASwingFoot.rows();
+        genSwingFootConstraint(swingFootTransform);
     	AConstraint.resize(nConstraints, 2*(N+M));
     	bConstraintMin.resize(nConstraints);
     	bConstraintMax.resize(nConstraints);
@@ -265,10 +313,6 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     Eigen::VectorXd decisionVariables = solveQP();
     
     // Split the QP solution in ZMP dot and footsteps
-    Eigen::VectorXd zDotOptimalX(N);
-    Eigen::VectorXd zDotOptimalY(N);
-    Eigen::VectorXd footstepsOptimalX(M);
-    Eigen::VectorXd footstepsOptimalY(M);
 
     zDotOptimalX = (decisionVariables.head(N));
     zDotOptimalY = (decisionVariables.segment(N+M,N));
@@ -289,22 +333,77 @@ void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredCo
     zmpPos << nextStateX(2),nextStateY(2),0.0;
     predictedFootstep << footstepsOptimalX(0),footstepsOptimalY(0),0.0,predictedOrientations(1);
 
-    logToFile();
 
     ++controlIter;
+
+
     mpcIter = floor(controlIter*controlTimeStep/mpcTimeStep);
-    if(mpcIter>=S+D){
+
+
+  // Timing manager update
+     if (Timing_Manager(0,0)-controlTimeStep >= 0.0) {
+
+         Timing_Manager(0,0) = Timing_Manager(0,0) - controlTimeStep;
+         Timing_Manager(4,0) = Timing_Manager(4,0) + controlTimeStep;
+         Timing_Manager(4,2) = Timing_Manager(0,2);
+         Timing_Manager(4,1) = Timing_Manager(0,1);
+         Timing_Manager(5,0) = 0;
+
+     }else{
+         
+        trig_y = true;
+        trig_x = true;
+
+     if (Timing_Manager(4,1) == doublesupport) Timing_Manager(5,0) = 1;
+
+        Eigen::MatrixXd line = Eigen::MatrixXd::Zero(1,3);
+        line << 0, 1, 0;
+        Timing_Manager.block(0,0,1,3) = Timing_Manager.block(1,0,1,3);
+        Timing_Manager.block(1,0,1,3) = Timing_Manager.block(2,0,1,3);
+        Timing_Manager.block(2,0,1,3) = Timing_Manager.block(3,0,1,3);
+        Timing_Manager.block(3,0,1,3) = Timing_Manager.block(4,0,1,3);
+        Timing_Manager(3,0) = Timing_Manager(3,0) + controlTimeStep; 
+        Timing_Manager.block(4,0,1,3) = line;
+     }
+
+    // Updating countdown of adapted step
+    if (CountDown != -100){
+
+    if (CountDown -1 == 1){//CountDown -1 == 2
+    // Reset timing manager matrix, with footstep change (since the adapted step has been performed)
+    Timing_Manager << singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, singleSupportDuration, 1, singleSupportDuration, doubleSupportDuration, 0, doubleSupportDuration, 0, 1, 0, 1, 0, 0; 
+    CountDown = -100;
+    }else CountDown = CountDown-1;
+
+    }
+
+
+
+if(activate_timing_adaptation){
+    if(Timing_Manager(5,0)==1){
+        trig_y = true;
+        trig_x = true;
     	controlIter = 0;
     	mpcIter = 0;
         footstepCounter++;
-        //InitCom = 0;
     }
+}else{
+    if(mpcIter>=S+D){ 
+        trig_y = true;
+        trig_x = true;
+    	controlIter = 0;
+    	mpcIter = 0;
+        footstepCounter++;
+    }
+
+}
+
+  
+
 
     std::cout << "Iteration " << controlIter << " Footstep " << footstepCounter << std::endl;
 }
 
-void MPCSolver::logToFile() {
-}
 
 void MPCSolver::changeReferenceFrame(Eigen::Affine3d swingFootTransform) {
 
@@ -322,6 +421,445 @@ void MPCSolver::changeReferenceFrame(Eigen::Affine3d swingFootTransform) {
 	zmpPos(0)-= -swingFootPos(0);
 	zmpPos(1)-= -swingFootPos(1);
 }
+
+void MPCSolver::ComputeFeasibilityRegion(){
+ 
+            if (widgetReference==false) {
+            c_k_x = TailIntegral*v_x;
+            c_k_y = TailIntegral*v_y;
+            }else{
+            c_k_x = TailIntegral*vRefX;
+            c_k_y = TailIntegral*vRefY;
+            }
+
+            if(Timing_Manager(0,1) == 1){
+             
+            // SINGLE SUPPORT
+
+            lambda_0 = exp(-omega*(Timing_Manager(0,0)+Timing_Manager(1,0)));
+            lambda_1 = exp(-omega*(Timing_Manager(2,0)+Timing_Manager(3,0)));
+            lambda_tot = exp(-omega*1); 
+
+            x_u_M = (d/2)*(1-lambda_0)+(d/2+deltaXMax)*(lambda_0-lambda_0*lambda_1)+(d/2+2*deltaXMax)*(lambda_0*lambda_1-lambda_tot);
+            x_u_m = - x_u_M;
+
+            if(supportFoot == true){
+            // right support foot
+            y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+
+            }else{
+            // left support foot
+            y_u_M = (d/2)*(1-lambda_0)+(d/2-deltaYIn)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(-deltaYOut-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+            }
+
+            } else {
+             
+            // DOUBLE SUPPORT
+
+            lambda_0 = exp(-omega*(Timing_Manager(0,0)));
+            lambda_1 = exp(-omega*(Timing_Manager(1,0)+Timing_Manager(2,0)));
+            lambda_tot = exp(-omega*1); 
+
+            x_u_M = (d/2)*(1-lambda_0)+(d/2+deltaXMax)*(lambda_0-lambda_0*lambda_1)+(d/2+2*deltaXMax)*(lambda_0*lambda_1-lambda_tot);
+            x_u_m = - x_u_M;
+
+            if(supportFoot == true){
+            // right support foot
+            y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+
+            }else{
+            // left support foot
+            y_u_M = (d/2)*(1-lambda_0)+(d/2-deltaYIn)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(-deltaYOut-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+            }
+
+
+
+           }
+
+
+
+if (false){
+            
+
+            double t_k = 0 ; //simulationTime-0.5*footstepCounter;
+
+               
+
+    if(Timing_Manager(0,1) == 1){
+             
+            // SINGLE SUPPORT
+
+            // First predicted step (actually performed)
+            double ts1 = Timing_Manager(0,0);
+            double td1 = Timing_Manager(1,0);
+            // Second predicted step
+            double ts2 = Timing_Manager(2,0);
+            double td2 = Timing_Manager(3,0);
+            // Third predicted step (a part)
+            double ts3 = Timing_Manager(4,0);
+
+            x_u_M = +(d/2)*(1-exp(-omega*ts1))
+                    -(((2*deltaXMax+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +(((2*deltaXMax+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(d+deltaXMax)*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -(((2*deltaXMax+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((d+deltaXMax))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +(((2*deltaXMax+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((d+deltaXMax))*exp(-omega*(ts1+td1+ts2)))
+                    +(3*d/2+2*deltaXMax)*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    +c_k_x;
+
+            x_u_m = -x_u_M;
+
+            if(supportFoot == true){
+        
+
+            // Right support foot
+            y_u_M = +(d/2)*(1-exp(-omega*ts1))
+                    -(((2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +(((2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(d+deltaYOut)*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -(((2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((d+deltaYOut-deltaYIn))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +(((2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((d+deltaYOut-deltaYIn))*exp(-omega*(ts1+td1+ts2)))
+                    +(3*d/2+(deltaYOut-deltaYIn))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    +c_k_y;
+
+            y_u_m = -(d/2)*(1-exp(-omega*ts1))
+                    -((-(2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(-d/2)*exp(-omega*(ts1+td1)))
+                    +((-(2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(-d/2)*exp(-omega*(ts1)))
+                    +(-d-deltaYIn)*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -((-(2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((-d-(+deltaYIn-deltaYOut)))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +((-(2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((-d-(+deltaYIn-deltaYOut)))*exp(-omega*(ts1+td1+ts2)))
+                    +(-3*d/2-(+deltaYIn-0*deltaYOut))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    +c_k_y;
+
+             }else{
+
+
+             // Left support foot 
+            y_u_M = +(d/2)*(1-exp(-omega*ts1))
+                    -(((2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +(((2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(d+deltaYIn)*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -(((2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((d+deltaYIn-deltaYOut))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +(((2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((d+deltaYIn-deltaYOut))*exp(-omega*(ts1+td1+ts2)))
+                    +(3*d/2+(deltaYIn-deltaYOut))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    +c_k_y;
+
+            y_u_m = -(d/2)*(1-exp(-omega*ts1))
+                    -((-(2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +((-(2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(-d-deltaYOut)*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -((-(2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((-d-(+deltaYOut-deltaYIn)))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +((-(2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((-d-(+deltaYOut-deltaYIn)))*exp(-omega*(ts1+td1+ts2)))
+                    +(-3*d/2-(+deltaYOut-0*deltaYIn))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    +c_k_y;
+
+             }
+
+        }else{
+
+            // DOUBLE SUPPORT
+
+            // First predicted step (actually performed)
+            double ts1 = Timing_Manager(3,0);
+            double td1 = Timing_Manager(0,0);
+            // Second predicted step
+            double ts2 = Timing_Manager(1,0);
+            double td2 = Timing_Manager(2,0);
+            // Third predicted step (a part)
+            double ts3 = 0.3;
+            double td3 = Timing_Manager(4,0);
+
+            x_u_M = -(((2*footstepsOptimalX(0)+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +(((2*footstepsOptimalX(0)+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(d+footstepsOptimalX(0))*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -(((2*deltaXMax+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((d+footstepsOptimalX(0)))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +(((2*deltaXMax+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((d+footstepsOptimalX(0)))*exp(-omega*(ts1+td1+ts2)))
+                    +(3*d/2+2*deltaXMax)*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    -(((2*deltaXMax+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2+ts3+td3)+1)*exp(-omega*(ts1+td1+ts2+td2+ts3+td3))+((d+deltaXMax+footstepsOptimalX(0)))*exp(-omega*(ts1+td1+ts2+td2+ts3+td3)))
+                    +(((2*deltaXMax+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+ts3)+1)*exp(-omega*(ts1+td1+ts2+ts3))+((d+deltaXMax+footstepsOptimalX(0)))*exp(-omega*(ts1+td1+ts2+ts3)))
+                    +c_k_x;
+
+            x_u_m = -x_u_M;
+
+            if(supportFoot == true){
+        
+
+            // Right support foot
+            y_u_M = -(((2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +(((2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(d+footstepsOptimalY(0))*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -(((2*deltaYIn+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((d+footstepsOptimalY(0)-deltaYIn))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +(((2*deltaYIn+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((d+footstepsOptimalY(0)-deltaYIn))*exp(-omega*(ts1+td1+ts2)))
+                    +(3*d/2+(footstepsOptimalY(0)-deltaYIn))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    -(((2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2+ts3+td3)+1)*exp(-omega*(ts1+td1+ts2+td2+ts3+td3))+((3*d/2+footstepsOptimalY(0)-deltaYIn))*exp(-omega*(ts1+td1+ts2+td2+ts3+td3)))
+                    +(((2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+ts3)+1)*exp(-omega*(ts1+td1+ts2+ts3))+((3*d/2+footstepsOptimalY(0)-deltaYIn))*exp(-omega*(ts1+td1+ts2+ts3)))
+                    +c_k_y;
+
+            y_u_m = -((-(2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(-d/2)*exp(-omega*(ts1+td1)))
+                    +((-(2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(-d/2)*exp(-omega*(ts1)))
+                    +(-d-footstepsOptimalY(0))*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -((-(2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((-d-(+footstepsOptimalY(0)-deltaYOut)))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +((-(2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((-d-(+footstepsOptimalY(0)-deltaYOut)))*exp(-omega*(ts1+td1+ts2)))
+                    +(-3*d/2-(+footstepsOptimalY(0)-0*deltaYOut))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    -((-(2*deltaYIn+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2+ts3+td3)+1)*exp(-omega*(ts1+td1+ts2+td2+ts3+td3))+((-3*d/2-(+footstepsOptimalY(0)-0*deltaYOut)))*exp(-omega*(ts1+td1+ts2+td2+ts3+td3)))
+                    +((-(2*deltaYIn+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+ts3)+1)*exp(-omega*(ts1+td1+ts2+ts3))+((-3*d/2-(+footstepsOptimalY(0)-0*deltaYOut)))*exp(-omega*(ts1+td1+ts2+ts3)))
+                    +c_k_y;
+
+             }else{
+
+
+             // Left support foot 
+            y_u_M = -(((2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +(((2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(d+footstepsOptimalY(0))*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -(((2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((d+footstepsOptimalY(0)-deltaYOut))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +(((2*deltaYOut+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((d+footstepsOptimalY(0)-deltaYOut))*exp(-omega*(ts1+td1+ts2)))
+                    +(3*d/2+(footstepsOptimalY(0)-deltaYOut))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    -(((2*deltaYIn+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2+ts3+td3)+1)*exp(-omega*(ts1+td1+ts2+td2+ts3+td3))+((3*d/2+(footstepsOptimalY(0)-deltaYOut)))*exp(-omega*(ts1+td1+ts2+td2+ts3+td3)))
+                    +(((2*deltaYIn+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+ts3)+1)*exp(-omega*(ts1+td1+ts2+ts3))+((3*d/2+(footstepsOptimalY(0)-deltaYOut)))*exp(-omega*(ts1+td1+ts2+ts3)))
+                    +c_k_y;
+
+            y_u_m = -((-(2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1+td1)+1)*exp(-omega*(ts1+td1))+(d/2)*exp(-omega*(ts1+td1)))
+                    +((-(2*footstepsOptimalY(0)+d)/(2*omega*td1))*(omega*(t_k+ts1)+1)*exp(-omega*(ts1))+(d/2)*exp(-omega*(ts1)))
+                    +(-d-footstepsOptimalY(0))*(exp(-omega*(ts1+td1))-exp(-omega*(ts1+td1+ts2)))
+                    -((-(2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2+td2)+1)*exp(-omega*(ts1+td1+ts2+td2))+((-d-(+footstepsOptimalY(0)-deltaYIn)))*exp(-omega*(ts1+td1+ts2+td2)))
+                    +((-(2*deltaYIn+d)/(2*omega*td1))*(omega*(t_k+ts1+td1+ts2)+1)*exp(-omega*(ts1+td1+ts2))+((-d-(+footstepsOptimalY(0)-deltaYIn)))*exp(-omega*(ts1+td1+ts2)))
+                    +(-3*d/2-(+footstepsOptimalY(0)-0*deltaYIn))*(exp(-omega*(ts1+td1+ts2+td2))-exp(-omega*(ts1+td1+ts2+td2+ts3)))
+                    -((-(2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+td2+ts3+td3)+1)*exp(-omega*(ts1+td1+ts2+td2+ts3+td3))+((-3*d/2-(+footstepsOptimalY(0)-0*deltaYIn)))*exp(-omega*(ts1+td1+ts2+td2+ts3+td3)))
+                    +((-(2*deltaYOut+d)/(2*omega*td2))*(omega*(t_k+ts1+td1+ts2+ts3)+1)*exp(-omega*(ts1+td1+ts2+ts3))+((-3*d/2-(+footstepsOptimalY(0)-0*deltaYIn)))*exp(-omega*(ts1+td1+ts2+ts3)) )
+                    +c_k_y;
+
+
+                    
+
+
+             }
+
+}
+
+
+
+}
+}
+
+void MPCSolver::TimingAdaptation() {
+
+            if (footstepCounter>0){
+            margin_x = 0.015;
+            margin_y = 0.015;
+            }else{
+            margin_x = 0.0;
+            margin_y = 0.0;
+            }
+
+            xu_state = comPos(0)+comVel(0)/omega;
+            yu_state = comPos(1)+comVel(1)/omega;
+
+            A_timing(0) = 1;
+
+            if(Timing_Manager(0,1) == 1){
+
+            t_MIN = 0.05;
+            /*
+            if (Timing_Manager(0,0) > 0.10) t_MIN = 0.10;
+            if (Timing_Manager(0,0) > 0.15) t_MIN = 0.15;
+            if (Timing_Manager(0,0) > 0.20) t_MIN = 0.20;
+            if (Timing_Manager(0,0) > 0.25) t_MIN = 0.25;/**/
+             
+            // SINGLE SUPPORT
+            b_timing_max(0) = exp(-omega*(Timing_Manager(1,0)+t_MIN));
+            b_timing_min(0) = exp(-omega*0.5);
+            A_timing(1) = d/2 - (d/2+deltaXMax)*(1-lambda_1) - (d/2+2*deltaXMax)*(lambda_1);
+            b_timing_max(1) = -(-xu_state - margin_x + d/2 - (d/2+2*deltaXMax)*lambda_tot);
+            b_timing_min(1) = -10;   // -(xu_state - margin_x - d/2 + (d/2+2*deltaXMax)*lambda_tot); 
+
+            if(supportFoot == true){
+            // right support foot
+
+            A_timing(2) = -(-d/2) + (deltaYIn-d/2)*(1-lambda_1) + (-d/2+deltaYIn-deltaYOut)*(lambda_1);
+            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
+            b_timing_min(2) = -10; // -(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*(lambda_tot));  
+
+            }else{
+            // left support foot
+
+            A_timing(2) = -(-d/2) +(-deltaYOut-d/2)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*lambda_1;
+            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
+            b_timing_min(2) = -10; //-(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot); 
+
+            }
+
+            } else {
+             
+            // DOUBLE SUPPORT
+            t_MIN = 0.5*Timing_Manager(0,0);
+            b_timing_max(0) = exp(-omega*(t_MIN));
+            b_timing_min(0) = exp(-omega*0.5);
+            A_timing(1) = -(-d/2 - (d/2+deltaXMax)*(1-lambda_1) - (d/2+2*deltaXMax)*(lambda_1));
+            b_timing_max(1) = +(-xu_state - margin_x + d/2 - (d/2+2*deltaXMax)*lambda_tot);
+            b_timing_min(1) = -10;//-(xu_state - margin_x - d/2 + (d/2+2*deltaXMax)*lambda_tot); 
+
+            if(supportFoot == true){
+            // right support foot
+
+            A_timing(2) = -(-d/2) + (deltaYIn-d/2)*(1-lambda_1) + (-d/2+deltaYIn-deltaYOut)*(lambda_1);
+            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
+            b_timing_min(2) = -10;//-(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*(lambda_tot));    
+
+            }else{
+            // left support foot
+
+            A_timing(2) = -(-d/2) +(-deltaYOut-d/2)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*lambda_1; 
+            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
+            b_timing_min(2) = -10;//-(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot);  
+       
+            }
+
+
+
+           }
+
+
+	// Some QP Options
+	qpOASES::Options optionsTimingQP;
+	optionsTimingQP.setToMPC();
+	optionsTimingQP.printLevel=qpOASES::PL_NONE;
+	qpOASES::int_t nWSR = 300;
+
+	TimingQP = qpOASES::QProblem(1, 0);
+	TimingQP.setOptions(optionsTimingQP);
+
+	qpOASES::real_t t_f0[1];
+
+	qpOASES::real_t t_f0_HqpOASES[1*1] = { 1.0 };
+	qpOASES::real_t t_f0_FqpOASES[1] = {-lambda_0};
+
+	qpOASES::real_t t_f0_AqpOASES[3*1];
+	qpOASES::real_t t_f0_bMinqpOASES[3];
+	qpOASES::real_t t_f0_bMaxqpOASES[3];
+
+        //t_f0_HqpOASES[0*0] = 1;
+        //t_f0_FqpOASES[0] = -lambda_0;
+
+        for (int i=0; i<3; ++i) {
+        t_f0_AqpOASES[i*0] =  A_timing(i);
+        t_f0_bMinqpOASES[i] = b_timing_min(i);
+        t_f0_bMaxqpOASES[i] = b_timing_max(i);  
+        }
+
+        t_f0_AqpOASES[2*0] = 0;
+        t_f0_bMinqpOASES[2] = 0;
+        t_f0_bMaxqpOASES[2] = 0;
+
+	TimingQP.init(t_f0_HqpOASES,t_f0_FqpOASES,
+			t_f0_AqpOASES,NULL,NULL,t_f0_bMinqpOASES,t_f0_bMaxqpOASES,nWSR,NULL,NULL,NULL,NULL,NULL,NULL);
+
+//TimingQP.init(t_f0_HqpOASES,t_f0_FqpOASES,
+//			NULL,NULL,NULL,NULL,NULL,nWSR,NULL,NULL,NULL,NULL,NULL,NULL);
+
+
+	TimingQP.getPrimalSolution(t_f0);
+
+        new_timing = -(1/omega)*log(t_f0[0]);
+
+        std::cout << "NEW TIMING " << new_timing << std::endl;
+
+        if (Timing_Manager(0,1) == 1 && (ceil((new_timing-0.2)/0.01)/100 + 0.01)<= Timing_Manager(0,0)){
+        
+        Timing_Manager(0,2) = ceil((0.3*(new_timing)/Timing_Manager(0,0))/0.01)/100;       
+        if (Timing_Manager(0,2) < 0.0) Timing_Manager(0,2) = 0.01;
+        Timing_Manager(0,0) = new_timing - 0.2;
+        if (Timing_Manager(0,0) < 0.0) Timing_Manager(0,0) = 0.02;
+        Timing_Manager(4,0) = 1 - Timing_Manager(0,0) - Timing_Manager(1,0) - Timing_Manager(2,0) - Timing_Manager(3,0);               
+        double S1_ = ceil(Timing_Manager(0,0)/0.01);
+        double D1_ = ceil(Timing_Manager(1,0)/0.01);
+        CountDown = S1_ + D1_;
+        int u = getchar();
+        }
+               
+        if (Timing_Manager(0,1) == 0 && (ceil((new_timing)/0.01)/100 + 0.01)<= Timing_Manager(0,0)) {
+                
+        Timing_Manager(0,2) = ceil((0.2*(new_timing)/Timing_Manager(0,0))/0.01)/100;
+        Timing_Manager(0,0) = new_timing;
+        Timing_Manager(4,0) = 1 - Timing_Manager(0,0) - Timing_Manager(1,0) - Timing_Manager(2,0) - Timing_Manager(3,0);               
+        double S1_ = ceil(Timing_Manager(0,0)/0.01);
+        CountDown = S1_ ;
+            
+        }
+
+}
+
+
+void MPCSolver::TimingAdaptation_euristics(){
+
+if(Timing_Manager(0,1) == 1){
+
+     double alpha, lambda_p, alpha_bar, t_ss_x, t_ss_y;
+     t_ss_x = 0.0;
+     t_ss_y = t_ss_x;
+
+     alpha_bar = (Timing_Manager(0,0))/Timing_Manager(0,2);
+
+     if(comPos(0)+comVel(0)/omega>0.0){
+     alpha = alpha_bar*((comPos(0)+comVel(0)/omega)/(x_u_M-0.1));
+
+           //if(alpha>0.6) t_ss_x = (-1/omega)*log((alpha+exp(-omega*Timing_Manager(0,0)))/(1+alpha)); 
+           if(x_u_M-((comPos(0)+comVel(0)/omega))<0.16) t_ss_x = (-1/omega)*log((alpha_bar+exp(-omega*Timing_Manager(0,0)))/(1+alpha_bar)); //0.16
+
+     }else{
+     alpha = alpha_bar*((comPos(0)+comVel(0)/omega)/(x_u_m+0.1));
+
+           //if(alpha>0.60) t_ss_x = (-1/omega)*log((alpha+exp(-omega*Timing_Manager(0,0)))/(1+alpha)); 
+           if(((comPos(0)+comVel(0)/omega))-x_u_m<0.16) t_ss_x = (-1/omega)*log((alpha_bar+exp(-omega*Timing_Manager(0,0)))/(1+alpha_bar));
+
+     }
+
+     if(comPos(1)+comVel(1)/omega>0.0){
+     alpha = alpha_bar*((comPos(1)+comVel(1)/omega)/(y_u_M-0.05));
+
+           //if(alpha>0.60) t_ss_y = (-1/omega)*log((alpha+exp(-omega*Timing_Manager(0,0)))/(1+alpha)); 
+           if(y_u_M-((comPos(1)+comVel(1)/omega))<0.1) t_ss_y = (-1/omega)*log((alpha_bar+exp(-omega*Timing_Manager(0,0)))/(1+alpha_bar)); //0.1
+
+     }else{
+     alpha = alpha_bar*((comPos(1)+comVel(1)/omega)/(y_u_m+0.05));
+
+           //if(alpha>0.60) t_ss_y = (-1/omega)*log((alpha+exp(-omega*Timing_Manager(0,0)))/(1+alpha)); 
+           if(((comPos(1)+comVel(1)/omega))-x_u_m<0.1) t_ss_y = (-1/omega)*log((alpha_bar+exp(-omega*Timing_Manager(0,0)))/(1+alpha_bar));
+
+     }
+
+     if(t_ss_x>t_ss_y && t_ss_x>0.02){
+     if(CountDown == -100){
+     Timing_Manager(4,0) = Timing_Manager(0,0)-t_ss_x;
+     Timing_Manager(0,2) = Timing_Manager(0,2)*t_ss_x/Timing_Manager(0,0);
+     Timing_Manager(0,0) = t_ss_x+0.01;
+     Timing_Manager(4,2) = Timing_Manager(4,0);
+     CountDown = round((t_ss_y+Timing_Manager(1,0))/0.01);
+     }
+     }
+     if(t_ss_y>t_ss_x && t_ss_y>0.02){
+     if(CountDown == -100){
+     Timing_Manager(4,0) = Timing_Manager(0,0)-t_ss_y;
+     Timing_Manager(0,2) = Timing_Manager(0,2)*t_ss_y/Timing_Manager(0,0);
+     Timing_Manager(0,0) = t_ss_y+0.01;
+     Timing_Manager(4,2) = Timing_Manager(4,0);
+     CountDown = round((t_ss_y+Timing_Manager(1,0))/0.01);
+     }
+     }
+
+/*     
+     std::cout<<"t_ss_x " << t_ss_x <<std::endl;
+     std::cout<<"t_ss_y " << t_ss_y <<std::endl;
+     std::cout<<Timing_Manager<<std::endl;
+     if(t_ss_x != 0.0 || t_ss_y != 0.0) int h = getchar();/**/
+}
+
+}
+
 
 void MPCSolver::genStabilityConstraint() {
 	Eigen::VectorXd b(N);
@@ -351,16 +889,211 @@ void MPCSolver::genSwingFootConstraint(Eigen::Affine3d swingFootTransform) {
 	int sign = 1;
 	if (footstepCounter%2 == 0) sign = -1;
 
-	bSwingFoot(0) = step;//predictedFootstep(0);//swingFootPos(0);
+	bSwingFoot(0) = 0*step;//predictedFootstep(0);//swingFootPos(0);
 	bSwingFoot(1) = sign*0.15;//predictedFootstep(1);//swingFootPos(1);
-	bSwingFoot(2) = 2*step;
+	bSwingFoot(2) = 0*2*step;
 	bSwingFoot(3) = 0;
 }
+
+void MPCSolver::genUsefulMatrices() {
+
+
+	for(int i=0;i<S;++i){
+		Icf(i,i)=1;
+	}
+
+        int S_1,D_1,S_2,D_2,S_3,D_3;
+
+if(activate_timing_adaptation){
+
+        // With timing adaptation        
+
+        if (Timing_Manager(0,1)==singlesupport){
+
+            // First predicted step (actually performed)
+            S_1 = round(Timing_Manager(0,2)/mpcTimeStep);
+            D_1 = round(Timing_Manager(1,2)/mpcTimeStep);
+            // Second predicted step
+            S_2 = round(Timing_Manager(2,2)/mpcTimeStep);
+            D_2 = round(Timing_Manager(3,2)/mpcTimeStep);
+            // Third predicted step (a part)
+            S_3 = mpcIter; //round(Timing_Manager(4,0)/mpcTimeStep)
+
+
+            if (S_1+D_1+S_2+D_2+S_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) S_1 = S_1-1;
+            //if (S_1+D_1+S_2+D_2+S_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) S_3 = S_3-1;
+            if (S_1+D_1+S_2+D_2+S_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) S_1 = S_1+1;
+            //if (S_1+D_1+S_2+D_2+S_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) S_3 = S_3+1;
+
+
+            Ic.block(0,0,S_1-mpcIter,S_1-mpcIter) = Eigen::MatrixXd::Identity(S_1-mpcIter,S_1-mpcIter);
+            Ic.block(S_1-mpcIter,S_1-mpcIter,D_1,D_1) = Eigen::MatrixXd::Zero(D_1,D_1);
+            Ic.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2,S_2) = Eigen::MatrixXd::Identity(S_2,S_2);
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = Eigen::MatrixXd::Zero(D_2,D_2);
+
+            if (mpcIter>0) Ic.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter);
+
+
+            rCosZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Identity(S_1+D_1-mpcIter,S_1+D_1-mpcIter); //S_1+D_1-mpcIter
+	    rSinZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+
+            rCosZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*cos(predictedOrientations(1));
+	    rSinZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*sin(predictedOrientations(1));
+
+            if(mpcIter>0){
+            rCosZmp.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*cos(predictedOrientations(2));
+	    rSinZmp.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*sin(predictedOrientations(2));
+            }
+
+
+        }else{
+
+            // First predicted step (actually performed)   
+            D_1 = round(Timing_Manager(0,2)/mpcTimeStep);
+            // Second predicted step
+            S_1 = round(Timing_Manager(3,2)/mpcTimeStep);
+            D_2 = round(Timing_Manager(2,2)/mpcTimeStep);
+            // Third predicted step
+            S_2 = round(Timing_Manager(1,2)/mpcTimeStep);
+            D_3 = round(Timing_Manager(5,2)/mpcTimeStep);
+            
+            if (S_2+D_3>mpcIter) D_3 = D_3-1;
+            if (S_2+D_3<mpcIter) D_3 = D_3+1;
+  
+            if (floor(Timing_Manager(4,0)/mpcTimeStep) == 0){
+            D_3 = 0;
+            D_1 = ceil(Timing_Manager(0,0)/mpcTimeStep);
+            }
+
+            if (S_1+D_1+S_2+D_2+D_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) D_1 = D_1-1;
+            //if (S_1+D_1+S_2+D_2+D_3>20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) D_3 = D_3-1;
+            if (S_1+D_1+S_2+D_2+D_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) D_1 = D_1+1;
+            //if (S_1+D_1+S_2+D_2+D_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) D_3 = D_3+1;
+
+/*
+            std::cout<<"S_1 "<<S_1<<std::endl;
+            std::cout<<"D_1 "<<D_1<<std::endl;
+            std::cout<<"S_2 "<<S_2<<std::endl;
+            std::cout<<"D_2 "<<D_2<<std::endl;
+            std::cout<<"mpcIter "<<mpcIter<<std::endl;
+       std::cout<<"TM"<<std::endl;
+        std::cout<<Timing_Manager<<std::endl;/**/
+
+            Ic.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+            Ic.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2,S_2) = Eigen::MatrixXd::Identity(S_2,S_2);
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = Eigen::MatrixXd::Zero(D_2,D_2);
+
+
+            if (mpcIter-S_1<=0){
+
+            Ic.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter);
+
+            }else{ 
+            Ic.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,S_1,S_1) = Eigen::MatrixXd::Identity(S_1,S_1);
+            Ic.block(D_1+2*S_1+D_2+S_2-mpcIter,D_1+2*S_1+D_2+S_2-mpcIter,mpcIter-S_1,mpcIter-S_1) =                  Eigen::MatrixXd::Zero(mpcIter-S_1,mpcIter-S_1);}
+
+            rCosZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Identity(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+	    rSinZmp.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+
+            rCosZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*cos(predictedOrientations(1));
+	    rSinZmp.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2+D_2,S_2+D_2) = Eigen::MatrixXd::Identity(S_2+D_2,S_2+D_2)*sin(predictedOrientations(1));
+
+            rCosZmp.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*cos(predictedOrientations(2));
+	    rSinZmp.block(D_1+S_1+D_2+S_2-mpcIter,D_1+S_1+D_2+S_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter)*sin(predictedOrientations(2));
+
+        }
+
+        // Don't plan to move for the first step
+	if((int)simulationTime/mpcTimeStep<S+D){
+		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
+	}
+
+
+	Eigen::MatrixXd Cc_ = Eigen::MatrixXd::Zero(N,M);
+        Cc = Cc_;
+
+
+        if (Timing_Manager(0,1) == singlesupport){
+        // Single support
+  
+        if(Timing_Manager(4,1)==doublesupport && Timing_Manager(4,0) == 0){//Timing_Manager(5,0)==1
+        Cc_.block(0,0,N/2,1) = Eigen::VectorXd::Ones(N/2);
+        Cc_.block(N/2,1,N/2,1) = Eigen::VectorXd::Ones(N/2);
+        }else{
+
+        Cc_.block(S_1+D_1-mpcIter,0,S_2+D_2,1) = Eigen::VectorXd::Ones(S_2+D_2);
+
+        if(N-(S_1+D_1+S_2+D_2-mpcIter)>0) Cc_.block(S_1+D_1+S_2+D_2-mpcIter,1,mpcIter,1) = Eigen::VectorXd::Ones(mpcIter);
+        }
+
+        }else{
+        // Double support
+        Cc_.block(S_1+D_1-mpcIter,0,S_2+D_2,1) = Eigen::VectorXd::Ones(S_2+D_2);
+        Cc_.block(S_1+D_1+S_2+D_2-mpcIter,1,mpcIter,1) = Eigen::VectorXd::Ones(mpcIter);
+        }
+
+        
+        Cc = Cc_;
+
+
+	zmpRotationMatrix << rCosZmp,rSinZmp,
+						-rSinZmp,rCosZmp;
+/*
+       Eigen::MatrixXd  __Ic = Eigen::MatrixXd::Zero(N,N);
+       __Ic = Ic;
+/**/
+}else{  
+        // No timing adaptation
+
+
+	if((int)simulationTime/mpcTimeStep<S+D){
+		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
+	}
+	else{
+		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Icf.block(mpcIter,mpcIter,S+D-mpcIter,S+D-mpcIter);
+	}
+
+	for(int i=0; i<M-1; ++i){
+		Ic.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Icf;
+	}
+
+	Ic.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Icf.block(0,0,mpcIter,mpcIter);
+
+
+
+	for(int i=0; i<M-1; ++i){
+		Cc.block(S+D-mpcIter+(i*(S+D)),i,S+D,1) = Ccf;
+	}
+
+	Cc.block(S+D-mpcIter+((M-1)*(S+D)),M-1,mpcIter,1) = Ccf.block(0,0,mpcIter,1);
+
+
+	rCosZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Identity(S+D-mpcIter,S+D-mpcIter);
+	rSinZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
+
+	for(int i=0; i<M-1; ++i){
+		rCosZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*cos(predictedOrientations(i+1));
+		rSinZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*sin(predictedOrientations(i+1));
+	}
+
+	rCosZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*cos(predictedOrientations(M));
+	rSinZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*sin(predictedOrientations(M));
+
+
+	zmpRotationMatrix << rCosZmp,rSinZmp,
+						-rSinZmp,rCosZmp;
+
+ }       
+        
+
+}
+
 
 void MPCSolver::genCostFunction() {
 	//qVx = 0;
 	//qVy = 0;
 
+/*
 	Eigen::MatrixXd Cc = Eigen::MatrixXd::Zero(N,M);
 	Eigen::VectorXd Ccf = Eigen::VectorXd::Ones(S+D);
 
@@ -369,6 +1102,13 @@ void MPCSolver::genCostFunction() {
 	}
 
 	Cc.block(S+D-mpcIter+((M-1)*(S+D)),M-1,mpcIter,1) = Ccf.block(0,0,mpcIter,1);
+/**/
+
+        if (widgetReference==false) {
+            vRefX = v_x;
+            vRefY = v_y;
+            omegaRef = v_th;
+        }
 
 	costFunctionH.block(0,0,N,N) = qZd*Eigen::MatrixXd::Identity(N,N) + qVx*Vu.transpose()*Vu + qZ*P.transpose()*P;
 	costFunctionH.block(N+M,N+M,N,N) = qZd*Eigen::MatrixXd::Identity(N,N) + qVy*Vu.transpose()*Vu + qZ*P.transpose()*P;
@@ -404,17 +1144,33 @@ void MPCSolver::genCostFunction() {
     costFunctionF<<costFunctionF1,costFunctionF2;
 }
 
+
 void MPCSolver::computeOrientations() {
+
 
 	// Difference matrix (theta_j - theta_{j-1})
 	Eigen::MatrixXd differenceMatrix = Eigen::MatrixXd::Identity(M,M);
 	for (int i=0; i<M-1; ++i) {
 		differenceMatrix(i+1,i) = -1;
 	}
+        
+        ss_d = singleSupportDuration;
+        ds_d = doubleSupportDuration;
+
+
+ /*
+        if(Timing_Manager(0,1) = singlesupport){
+        ss_d = Timing_Manager(0,2);
+        ds_d = Timing_Manager(1,2);
+        } else {
+        ss_d = Timing_Manager(3,2);
+        ds_d = Timing_Manager(0,2);
+        }
+/**/
 
 	// Rotation cost function
 	Eigen::MatrixXd footstepsH = (differenceMatrix.transpose()*differenceMatrix);
-	Eigen::VectorXd footstepsF = -omegaRef*(singleSupportDuration+doubleSupportDuration)*differenceMatrix.transpose()*Eigen::VectorXd::Ones(M);
+	Eigen::VectorXd footstepsF = -omegaRef*(ss_d+ds_d)*differenceMatrix.transpose()*Eigen::VectorXd::Ones(M);
 
 	// Constraint on maximum variation of orientation
 	Eigen::MatrixXd AOrientations = differenceMatrix;
@@ -480,54 +1236,10 @@ void MPCSolver::computeOrientations() {
 }
 
 void MPCSolver::genBalanceConstraint(){
+
 	AZmp.setZero();
 
-	Eigen::MatrixXd Icf = Eigen::MatrixXd::Zero(S+D,S+D);
-	Eigen::MatrixXd Ic = Eigen::MatrixXd::Zero(N,N);
-	Eigen::MatrixXd Cc = Eigen::MatrixXd::Zero(N,M);
-	Eigen::VectorXd Ccf = Eigen::VectorXd::Ones(S+D);
-
-	for(int i=0;i<S;++i){
-		Icf(i,i)=1;
-	}
-
-	if((int)simulationTime/mpcTimeStep<S+D){
-		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
-	}
-	else{
-		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Icf.block(mpcIter,mpcIter,S+D-mpcIter,S+D-mpcIter);
-	}
-
-	for(int i=0; i<M-1; ++i){
-		Ic.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Icf;
-	}
-
-	Ic.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Icf.block(0,0,mpcIter,mpcIter);
-
-	for(int i=0; i<M-1; ++i){
-		Cc.block(S+D-mpcIter+(i*(S+D)),i,S+D,1) = Ccf;
-	}
-
-	Cc.block(S+D-mpcIter+((M-1)*(S+D)),M-1,mpcIter,1) = Ccf.block(0,0,mpcIter,1);
-
-	Eigen::MatrixXd rCosZmp = Eigen::MatrixXd::Zero(N,N);
-	Eigen::MatrixXd rSinZmp = Eigen::MatrixXd::Zero(N,N);
-
-	rCosZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Identity(S+D-mpcIter,S+D-mpcIter);
-	rSinZmp.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
-
-	for(int i=0; i<M-1; ++i){
-		rCosZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*cos(predictedOrientations(i+1));
-		rSinZmp.block(S+D-mpcIter+(i*(S+D)),S+D-mpcIter+(i*(S+D)),S+D,S+D) = Eigen::MatrixXd::Identity(S+D,S+D)*sin(predictedOrientations(i+1));
-	}
-
-	rCosZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*cos(predictedOrientations(M));
-	rSinZmp.block(S+D-mpcIter+((M-1)*(S+D)),S+D-mpcIter+((M-1)*(S+D)),mpcIter,mpcIter) = Eigen::MatrixXd::Identity(S+D,S+D).block(0,0,mpcIter,mpcIter)*sin(predictedOrientations(M));
-
-	Eigen::MatrixXd zmpRotationMatrix(2*N,2*N);
-	zmpRotationMatrix << rCosZmp,rSinZmp,
-						-rSinZmp,rCosZmp;
-
+        // Build constraint matrices for the QP
 	AZmp.block(0,0,N,N) = Ic*P;
 	AZmp.block(0,N,N,M) = -Ic*Cc;
 	AZmp.block(N,N+M,N,N) = Ic*P;
@@ -538,15 +1250,14 @@ void MPCSolver::genBalanceConstraint(){
 	Eigen::VectorXd bZmpLeftTerm = Eigen::VectorXd::Zero(2*N);
 	Eigen::VectorXd bZmpRightTerm = Eigen::VectorXd::Zero(2*N);
 
-	bZmpLeftTerm << Ic*p*(footConstraintSquareWidth/2-0*0.0153-0.0193), Ic*p*(footConstraintSquareWidth/2-0*0.0153-0.0193);
+	bZmpLeftTerm << Ic*p*(footConstraintSquareWidth/2), Ic*p*(footConstraintSquareWidth/2);
 
 	bZmpRightTerm << Ic*p*zmpPos(0), Ic*p*zmpPos(1);
 	bZmpRightTerm = zmpRotationMatrix * bZmpRightTerm;
 
 	bZmpMax =   bZmpLeftTerm - bZmpRightTerm;
 	bZmpMin = - bZmpLeftTerm - bZmpRightTerm;
-
-
+        // Add here constraint restriction if needed!
 }
 
 void MPCSolver::genFeasibilityConstraint(){
@@ -671,6 +1382,13 @@ bool MPCSolver::supportFootHasChanged(){
 
 Eigen::VectorXd MPCSolver::getOptimalCoMPosition(){
     return comPos;
+}
+
+Eigen::VectorXd MPCSolver::getFeasibilityRegion(){
+
+    Eigen::Vector4d FR;
+    FR<<x_u_M, x_u_m, y_u_M, y_u_m;
+    return FR;
 }
 
 Eigen::VectorXd MPCSolver::getOptimalCoMVelocity(){

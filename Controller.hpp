@@ -90,6 +90,7 @@ private:
   double fdbk_x, fdbk_y; 
   double fdbk_x_err = 0;
   double fdbk_y_err = 0;
+  double tail_counter = -100;
 
   bool supportFoot;
   bool LEFT = false;
@@ -112,6 +113,8 @@ private:
   Eigen::Vector3d PreviousOptTargetFootPose;
   Eigen::VectorXd OptFootPositioning;
   Eigen::Vector3d PreviousOptCom;
+  Eigen::Vector3d OptComVel_err;
+  Eigen::VectorXd f_r;
 
   mpcSolver::MPCSolver* solver;
 
