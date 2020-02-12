@@ -154,7 +154,7 @@ void Controller::update()
 	}
 
 	qDotOld = qDot;
-        //storeData();
+        storeData();
         ArmSwing();
         //AnkleRegulation();
 } 

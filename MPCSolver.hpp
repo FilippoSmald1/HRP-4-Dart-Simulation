@@ -89,7 +89,7 @@ namespace mpcSolver{
         double x_u_M, x_u_m, y_u_M, y_u_m;
         double c_k_x, c_k_y, d;
         double lambda_0, lambda_1, lambda_tot;
-        double new_timing, t_MIN;
+        double new_timing, new_timing_x, new_timing_y, t_MIN, t_MAX;
         double margin_x, margin_y;
         double xu_state, yu_state;
 
@@ -171,7 +171,7 @@ namespace mpcSolver{
 
 	// Quadratic problem
 	qpOASES::QProblem qp;
-	qpOASES::QProblem TimingQP;
+	//qpOASES::QProblem TimingQP;
 
         // Timing QP matrices
         Eigen::MatrixXd H_Timing;

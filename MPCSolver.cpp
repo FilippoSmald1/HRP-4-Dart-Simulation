@@ -649,7 +649,7 @@ if (false){
 void MPCSolver::TimingAdaptation() {
 
             if (footstepCounter>0){
-            margin_x = 0.015;
+            margin_x = 0.025;
             margin_y = 0.015;
             }else{
             margin_x = 0.0;
@@ -659,137 +659,154 @@ void MPCSolver::TimingAdaptation() {
             xu_state = comPos(0)+comVel(0)/omega;
             yu_state = comPos(1)+comVel(1)/omega;
 
-            A_timing(0) = 1;
 
-            if(Timing_Manager(0,1) == 1){
-
-            t_MIN = 0.05;
-            /*
-            if (Timing_Manager(0,0) > 0.10) t_MIN = 0.10;
-            if (Timing_Manager(0,0) > 0.15) t_MIN = 0.15;
-            if (Timing_Manager(0,0) > 0.20) t_MIN = 0.20;
-            if (Timing_Manager(0,0) > 0.25) t_MIN = 0.25;/**/
-             
-            // SINGLE SUPPORT
-            b_timing_max(0) = exp(-omega*(Timing_Manager(1,0)+t_MIN));
-            b_timing_min(0) = exp(-omega*0.5);
-            A_timing(1) = d/2 - (d/2+deltaXMax)*(1-lambda_1) - (d/2+2*deltaXMax)*(lambda_1);
-            b_timing_max(1) = -(-xu_state - margin_x + d/2 - (d/2+2*deltaXMax)*lambda_tot);
-            b_timing_min(1) = -10;   // -(xu_state - margin_x - d/2 + (d/2+2*deltaXMax)*lambda_tot); 
-
-            if(supportFoot == true){
-            // right support foot
-
-            A_timing(2) = -(-d/2) + (deltaYIn-d/2)*(1-lambda_1) + (-d/2+deltaYIn-deltaYOut)*(lambda_1);
-            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
-            b_timing_min(2) = -10; // -(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*(lambda_tot));  
-
-            }else{
-            // left support foot
-
-            A_timing(2) = -(-d/2) +(-deltaYOut-d/2)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*lambda_1;
-            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
-            b_timing_min(2) = -10; //-(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot); 
-
-            }
-
-            } else {
-             
-            // DOUBLE SUPPORT
-            t_MIN = 0.5*Timing_Manager(0,0);
-            b_timing_max(0) = exp(-omega*(t_MIN));
-            b_timing_min(0) = exp(-omega*0.5);
-            A_timing(1) = -(-d/2 - (d/2+deltaXMax)*(1-lambda_1) - (d/2+2*deltaXMax)*(lambda_1));
-            b_timing_max(1) = +(-xu_state - margin_x + d/2 - (d/2+2*deltaXMax)*lambda_tot);
-            b_timing_min(1) = -10;//-(xu_state - margin_x - d/2 + (d/2+2*deltaXMax)*lambda_tot); 
-
-            if(supportFoot == true){
-            // right support foot
-
-            A_timing(2) = -(-d/2) + (deltaYIn-d/2)*(1-lambda_1) + (-d/2+deltaYIn-deltaYOut)*(lambda_1);
-            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
-            b_timing_min(2) = -10;//-(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*(lambda_tot));    
-
-            }else{
-            // left support foot
-
-            A_timing(2) = -(-d/2) +(-deltaYOut-d/2)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*lambda_1; 
-            b_timing_max(2) = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
-            b_timing_min(2) = -10;//-(yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot);  
-       
-            }
-
-
-
-           }
-
-
-	// Some QP Options
-	qpOASES::Options optionsTimingQP;
-	optionsTimingQP.setToMPC();
-	optionsTimingQP.printLevel=qpOASES::PL_NONE;
-	qpOASES::int_t nWSR = 300;
-
-	TimingQP = qpOASES::QProblem(1, 0);
-	TimingQP.setOptions(optionsTimingQP);
-
-	qpOASES::real_t t_f0[1];
-
-	qpOASES::real_t t_f0_HqpOASES[1*1] = { 1.0 };
-	qpOASES::real_t t_f0_FqpOASES[1] = {-lambda_0};
-
-	qpOASES::real_t t_f0_AqpOASES[3*1];
-	qpOASES::real_t t_f0_bMinqpOASES[3];
-	qpOASES::real_t t_f0_bMaxqpOASES[3];
-
-        //t_f0_HqpOASES[0*0] = 1;
-        //t_f0_FqpOASES[0] = -lambda_0;
-
-        for (int i=0; i<3; ++i) {
-        t_f0_AqpOASES[i*0] =  A_timing(i);
-        t_f0_bMinqpOASES[i] = b_timing_min(i);
-        t_f0_bMaxqpOASES[i] = b_timing_max(i);  
+        if(Timing_Manager(0,1) == 1){
+        // SINGLE SUPPORT
+        t_MIN = 0.05;
+        if (Timing_Manager(0,0) > 0.10) t_MIN = 0.10;
+        if (Timing_Manager(0,0) > 0.15) t_MIN = 0.15;
+        if (Timing_Manager(0,0) > 0.20) t_MIN = 0.20;
+        t_MAX = exp(-omega*(t_MIN + Timing_Manager(1,0)));
+        } else {             
+        // DOUBLE SUPPORT
+        t_MAX = exp(-omega*(0.03+0.5*Timing_Manager(0,0)));
         }
 
-        t_f0_AqpOASES[2*0] = 0;
-        t_f0_bMinqpOASES[2] = 0;
-        t_f0_bMaxqpOASES[2] = 0;
-
-	TimingQP.init(t_f0_HqpOASES,t_f0_FqpOASES,
-			t_f0_AqpOASES,NULL,NULL,t_f0_bMinqpOASES,t_f0_bMaxqpOASES,nWSR,NULL,NULL,NULL,NULL,NULL,NULL);
-
-//TimingQP.init(t_f0_HqpOASES,t_f0_FqpOASES,
-//			NULL,NULL,NULL,NULL,NULL,nWSR,NULL,NULL,NULL,NULL,NULL,NULL);
+        t_MIN = exp(-omega*0.5);
 
 
-	TimingQP.getPrimalSolution(t_f0);
 
-        new_timing = -(1/omega)*log(t_f0[0]);
+        // CLOSED FORM SOLUTION
+
+        // x component
+
+        if ( (x_u_M-xu_state)*(x_u_M-xu_state) < (-x_u_m+xu_state)*(-x_u_M+xu_state)){
+           // upper bound can be activated
+
+           if(xu_state>=x_u_M-margin_x){
+
+                double l0 = (xu_state+margin_x-d/2 +(d/2+2*deltaXMax)*lambda_tot)/(-d/2+(d/2+deltaXMax)*(1-lambda_1)+(d/2+2*deltaXMax)*(lambda_1));
+                if (l0<=t_MAX) new_timing_x = -(1/omega)*log(l0);
+                else new_timing_x = -(1/omega)*log(t_MAX);
+
+            }else{ 
+            if(Timing_Manager(0,1) == 1) new_timing_x = Timing_Manager(0,0)+Timing_Manager(1,0);
+            if(Timing_Manager(0,1) == 0) new_timing_x = Timing_Manager(0,0);
+            }
+
+        }else{
+           // lower bound can be activated
+
+           if(xu_state<=x_u_m+margin_x){
+
+           xu_state = -xu_state;
+
+           double l0 = (xu_state+margin_x-d/2 +(d/2+2*deltaXMax)*lambda_tot)/(-d/2+(d/2+deltaXMax)*(1-lambda_1)+(d/2+2*deltaXMax)*(lambda_1));
+
+           if (l0<=t_MAX) new_timing_x = -(1/omega)*log(l0);
+           else new_timing_x = -(1/omega)*log(t_MAX);
+
+           }else{ 
+            if(Timing_Manager(0,1) == 1) new_timing_x = Timing_Manager(0,0)+Timing_Manager(1,0);
+            if(Timing_Manager(0,1) == 0) new_timing_x = Timing_Manager(0,0);
+            }
+        }
+
+        // y component
+        std::cout<<y_u_m<<" " <<yu_state<<" " <<y_u_M<<std::endl;
+
+        if ( (y_u_M-yu_state)*(y_u_M-yu_state) < (-y_u_m+yu_state)*(-y_u_M+yu_state)){
+
+           if (footstepCounter%2==1){ yu_state = -yu_state;
+           y_u_m = -y_u_M;
+           y_u_M = -y_u_m;
+           }
+
+        std::cout<<y_u_m<<" " <<yu_state<<" " <<y_u_M<<std::endl;
+           // upper bound can be activated
+
+           if(yu_state>=y_u_M-margin_y){
+
+                double l0;
+                if(Timing_Manager(0,1) == 1) l0 = exp(-omega*(Timing_Manager(0,0)+Timing_Manager(1,0)-0.03));
+                else l0 = exp(-omega*(Timing_Manager(0,0)-0.03));
+
+                if (l0<=t_MAX) new_timing_y = -(1/omega)*log(l0);
+                else new_timing_y = -(1/omega)*log(t_MAX);
+
+            }else{ 
+            if(Timing_Manager(0,1) == 1) new_timing_y = Timing_Manager(0,0)+Timing_Manager(1,0);
+            if(Timing_Manager(0,1) == 0) new_timing_y = Timing_Manager(0,0);
+            }
+
+        }else{
+           // lower bound can be activated
+
+           if(yu_state<=y_u_m+margin_y){
+
+           double l0 = (yu_state-margin_y+d/2 +(-d/2+deltaYIn-deltaYOut)*lambda_tot)/(d/2-(d/2+deltaYOut)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_1));
+
+           if (l0<=t_MAX) new_timing_y = -(1/omega)*log(l0);
+           else new_timing_y = -(1/omega)*log(t_MAX);
+
+           }else{ 
+            if(Timing_Manager(0,1) == 1) new_timing_y = Timing_Manager(0,0)+Timing_Manager(1,0);
+            if(Timing_Manager(0,1) == 0) new_timing_y = Timing_Manager(0,0);
+            }
+        }
+     
+/*
+        if(supportFoot == true){
+        // right support foot
+
+        t_f0_AqpOASES_y[0*0] = d/2 - (deltaYOut+d/2)*(1-lambda_1) - (d/2+deltaYOut-deltaYIn)*(lambda_1);
+        t_f0_bMaxqpOASES_y[0] = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
+        t_f0_AqpOASES_y[1*0] = d/2 + (deltaYIn-d/2)*(1-lambda_1) + (-d/2+deltaYIn-deltaYOut)*(lambda_1);  
+        t_f0_bMaxqpOASES_y[1] = yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot;
+
+        }else{
+        // left support foot
+
+        t_f0_AqpOASES_y[0*0] = d/2 - (-deltaYIn+d/2)*(1-lambda_1)-(d/2-deltaYIn+deltaYOut)*lambda_1;
+        t_f0_bMaxqpOASES_y[0] = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
+        t_f0_AqpOASES_y[1*0] = d/2 +(-deltaYOut-d/2)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*lambda_1;
+        t_f0_bMaxqpOASES_y[1] = yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot;
+
+        }
+
+/**/
+
+    // std::cout<< "solution y " << t_f0_y[0] <<std::endl;
+
+     //new_timing_y = new_timing_x;
+
+     std::cout <<"timing_x " << new_timing_x<<std::endl;
+     std::cout <<"timing_y " << new_timing_y<<std::endl;
+
+     if(new_timing_x<new_timing_y) new_timing = new_timing_x;
+     if(new_timing_y<new_timing_x) new_timing = new_timing_y;
+     if(new_timing_y==new_timing_x) new_timing = new_timing_y;
+
 
         std::cout << "NEW TIMING " << new_timing << std::endl;
 
-        if (Timing_Manager(0,1) == 1 && (ceil((new_timing-0.2)/0.01)/100 + 0.01)<= Timing_Manager(0,0)){
-        
-        Timing_Manager(0,2) = ceil((0.3*(new_timing)/Timing_Manager(0,0))/0.01)/100;       
-        if (Timing_Manager(0,2) < 0.0) Timing_Manager(0,2) = 0.01;
-        Timing_Manager(0,0) = new_timing - 0.2;
-        if (Timing_Manager(0,0) < 0.0) Timing_Manager(0,0) = 0.02;
-        Timing_Manager(4,0) = 1 - Timing_Manager(0,0) - Timing_Manager(1,0) - Timing_Manager(2,0) - Timing_Manager(3,0);               
-        double S1_ = ceil(Timing_Manager(0,0)/0.01);
-        double D1_ = ceil(Timing_Manager(1,0)/0.01);
-        CountDown = S1_ + D1_;
-        int u = getchar();
-        }
-               
-        if (Timing_Manager(0,1) == 0 && (ceil((new_timing)/0.01)/100 + 0.01)<= Timing_Manager(0,0)) {
-                
-        Timing_Manager(0,2) = ceil((0.2*(new_timing)/Timing_Manager(0,0))/0.01)/100;
-        Timing_Manager(0,0) = new_timing;
-        Timing_Manager(4,0) = 1 - Timing_Manager(0,0) - Timing_Manager(1,0) - Timing_Manager(2,0) - Timing_Manager(3,0);               
-        double S1_ = ceil(Timing_Manager(0,0)/0.01);
-        CountDown = S1_ ;
-            
-        }
+     if (Timing_Manager(0,0)>0.1 && Timing_Manager(0,1) == 1 && new_timing -0.2 + 0.01 < Timing_Manager(0,0) && footstepCounter>2 && new_timing>0){
+     Timing_Manager(4,0) = Timing_Manager(0,0)-(new_timing-0.2);
+     Timing_Manager(0,2) = Timing_Manager(0,2)*(new_timing-0.2)/Timing_Manager(0,0);
+     Timing_Manager(0,0) = (new_timing-0.2)+0*0.01;
+     Timing_Manager(4,2) = Timing_Manager(4,0);
+     CountDown = round((new_timing)/0.01);
+     //int y = getchar();
+     }
+
+     if (Timing_Manager(0,0)>0.08 && Timing_Manager(0,1) == 0 && new_timing + 0.01 < Timing_Manager(0,0) && footstepCounter>2 &&  new_timing>0){
+     Timing_Manager(4,0) = Timing_Manager(0,0)-(new_timing);
+     Timing_Manager(0,2) = Timing_Manager(0,2)*(new_timing)/Timing_Manager(0,0);
+     Timing_Manager(0,0) = 0.01*round((new_timing)/0.01)+0*0.01;
+     Timing_Manager(4,2) = Timing_Manager(4,0);
+     CountDown = round((new_timing)/0.01);
+     //int y = getchar();
+     }
 
 }
 
