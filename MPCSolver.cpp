@@ -649,7 +649,7 @@ if (false){
 void MPCSolver::TimingAdaptation() {
 
             if (footstepCounter>0){
-            margin_x = 0.025;
+            margin_x = 0.015;
             margin_y = 0.015;
             }else{
             margin_x = 0.0;
@@ -662,10 +662,8 @@ void MPCSolver::TimingAdaptation() {
 
         if(Timing_Manager(0,1) == 1){
         // SINGLE SUPPORT
-        t_MIN = 0.05;
-        if (Timing_Manager(0,0) > 0.10) t_MIN = 0.10;
-        if (Timing_Manager(0,0) > 0.15) t_MIN = 0.15;
-        if (Timing_Manager(0,0) > 0.20) t_MIN = 0.20;
+        t_MIN = Timing_Manager(0,0)-0.05;
+        if (t_MIN < 0.05) t_MIN = 0.05;
         t_MAX = exp(-omega*(t_MIN + Timing_Manager(1,0)));
         } else {             
         // DOUBLE SUPPORT
