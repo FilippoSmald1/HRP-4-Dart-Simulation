@@ -345,7 +345,7 @@ if (widgetReference==false) {
 
 
   // Timing manager update
-     if (Timing_Manager(0,0)-controlTimeStep >= 0.0) {
+     if (Timing_Manager(0,0)-controlTimeStep > 0.005) {
 
          Timing_Manager(0,0) = Timing_Manager(0,0) - controlTimeStep;
          Timing_Manager(4,0) = Timing_Manager(4,0) + controlTimeStep;
