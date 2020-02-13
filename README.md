@@ -14,16 +14,18 @@ ADVICE: install Dart from source by following the described procedure on Dart We
              git checkout tags/v6.6.1 
                   
 to not checkout the latest tag of DART 6, otherwise you may have issues in running the code. The problem is only related to Dart, so if you are already practiced with it, feel free to use any version.  
-Attention: the mesh paths in HRP-4 urdf file must be modified and the Eigen directory should be decompressed if you need it!
+ATTENTION: the mesh paths in HRP-4 urdf file must be modified and the Eigen directory should be decompressed if you need it.
+The folder in which I have all the code and where I compile it is also added in the repository as an example, named "HRP4_folder.zip".
 
 SIMULATION REMARKS
 
 The core component of the code are the Controller and the MPC solver. The MPC solver provides a CoM trajectory, expressed w.r.t. the support foot, to be kinematically tracked by the Controller, which is also responsible of the swing foot trajectory generation, the measurement collection and some further tools (data storage, external pushes management, etc.).
-Inverse Kinematic is addressed with a simple weighted pseudo inverse method. Jacobians w.r.t. are kindly provided by Dart!  
+Inverse Kinematic is addressed with a simple weighted pseudo inverse method. Jacobians are kindly provided by Dart.  
 
-The MPC gait generation is the peculiar part of the simulation. The simulation implements a particular version of the IS-MPC (Intrinsically Stable MPC for humanoid gait generation developed at Diag Robotics Lab). IS-MPC is characterized by a wide set of interesting properties such as a mathematically demonstrable internal stability (no CoM divergence w.r.t. the ZMP). Moreover, it can be shown  that a certain degree of robustness can also be ensured. the following papers are suggested 
+The MPC gait generation is the peculiar part of the simulation. The simulation implements the IS-MPC (Intrinsically Stable MPC for humanoid gait generation developed at Diag Robotics Lab). IS-MPC is characterized by a wide set of interesting properties such as a mathematically demonstrable internal stability (no CoM divergence w.r.t. the ZMP).Moreover, the so called "feasibility driven timing adaptation" is also part of the code and can be activated. The following papers are suggested for further details
 
 1) N. Scianca, M. Cognetti, D. De Simone, L. Lanari and G. Oriolo, "Intrinsically stable MPC for humanoid gait generation," 2016 IEEE-RAS 16th International Conference on Humanoid Robots (Humanoids), Cancun, 2016, pp. 601-606;
 
 2) N. Scianca, D. De Simone, L. Lanari and G. Oriolo, MPC for Humanoid Gait Generation: Stability and Feasibility.
+
 
