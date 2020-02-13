@@ -76,7 +76,7 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
         stepHeight = 0.022;
 	singleSupportDuration = 0.3;
 	doubleSupportDuration = 0.2;
-        bool activateTimingAdaptation = true;
+        bool activateTimingAdaptation = false;
 
         // The following choice strongly simplifies the gait generation algorithm
         double prediction_horizon = 2*(singleSupportDuration+doubleSupportDuration);
@@ -154,7 +154,7 @@ void Controller::update()
 	}
 
 	qDotOld = qDot;
-        storeData();
+        //storeData();
         ArmSwing();
         //AnkleRegulation();
 } 
@@ -272,7 +272,7 @@ Eigen::VectorXd Controller::generateWalking(){
 
 
 
-        bool widj_ref = false;
+        bool widj_ref = true;
 
         double vx, vy, vth;
 

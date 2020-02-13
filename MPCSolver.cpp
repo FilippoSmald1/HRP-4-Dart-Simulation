@@ -223,7 +223,9 @@ if (widgetReference==false) {
 
     if(footstepCounter > 1 ){ 
 
-    // Position check 
+    if (false) { 
+
+    // Pushes 
     if (footstepCounter == 6 && controlIter > 1 && controlIter <= 7 ){ 
         
         comVel(0) = comVel(0) + 0.01*6.5;
@@ -244,6 +246,8 @@ if (widgetReference==false) {
         comVel(1) = comVel(1) + 0.01*5; //0.01*5.5
         push<< 5*40,5*40,0.0; 
     }
+
+}
 
 }
 
@@ -752,31 +756,11 @@ void MPCSolver::TimingAdaptation() {
             if(Timing_Manager(0,1) == 0) new_timing_y = Timing_Manager(0,0);
             }
         }
-     
-/*
-        if(supportFoot == true){
-        // right support foot
-
-        t_f0_AqpOASES_y[0*0] = d/2 - (deltaYOut+d/2)*(1-lambda_1) - (d/2+deltaYOut-deltaYIn)*(lambda_1);
-        t_f0_bMaxqpOASES_y[0] = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
-        t_f0_AqpOASES_y[1*0] = d/2 + (deltaYIn-d/2)*(1-lambda_1) + (-d/2+deltaYIn-deltaYOut)*(lambda_1);  
-        t_f0_bMaxqpOASES_y[1] = yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot;
-
-        }else{
-        // left support foot
-
-        t_f0_AqpOASES_y[0*0] = d/2 - (-deltaYIn+d/2)*(1-lambda_1)-(d/2-deltaYIn+deltaYOut)*lambda_1;
-        t_f0_bMaxqpOASES_y[0] = -yu_state - margin_y + d/2 - (d/2-deltaYIn+deltaYOut)*lambda_tot;
-        t_f0_AqpOASES_y[1*0] = d/2 +(-deltaYOut-d/2)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*lambda_1;
-        t_f0_bMaxqpOASES_y[1] = yu_state - margin_y + d/2 + (-d/2+deltaYIn-deltaYOut)*lambda_tot;
-
-        }
-
-/**/
-
-    // std::cout<< "solution y " << t_f0_y[0] <<std::endl;
-
-     //new_timing_y = new_timing_x;
+ 
+           if (footstepCounter%2==1){ yu_state = -yu_state;
+           y_u_m = -y_u_M;
+           y_u_M = -y_u_m;
+           }    
 
      std::cout <<"timing_x " << new_timing_x<<std::endl;
      std::cout <<"timing_y " << new_timing_y<<std::endl;
