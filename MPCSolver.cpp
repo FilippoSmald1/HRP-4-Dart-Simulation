@@ -223,29 +223,81 @@ if (widgetReference==false) {
 
     if(footstepCounter > 1 ){ 
 
-    if (false) { 
+    if (true) { 
 
-    // Pushes 
-    if (footstepCounter == 6 && controlIter > 1 && controlIter <= 7 ){ 
+    int sim_0 = 2; 
+
+    if (sim_0 == 1){
+
+    if (footstepCounter == 7 && controlIter > 1 && controlIter <= 10 ){ 
         
-        comVel(0) = comVel(0) + 0.01*6.5;
-        push<< 6.5*40,0.0,0.0; 
-
-    }
-
-
-    if (footstepCounter == 8 && controlIter > 1 && controlIter <= 7 ){ 
-
-        comVel(1) = comVel(1) - 0.01*5.5; //0.01*5.5
-        push<< 0.0,-5*40,0.0; 
-    }
-
-    if (footstepCounter == 15 && controlIter > 1 && controlIter <= 7 ){ 
-
         comVel(0) = comVel(0) + 0.01*5;
-        comVel(1) = comVel(1) + 0.01*5; //0.01*5.5
-        push<< 5*40,5*40,0.0; 
+        comVel(1) = comVel(1) + 0.01*4; //-0.01*4
+        push<< +5*39,4*39,0.0; 
+
     }
+
+    if (footstepCounter == 10 && controlIter > 1 && controlIter <= 10 ){ //14
+        
+        comVel(0) = comVel(0) + 0.01*5.5;
+        push<< 5.5*39,0.0,0.0; 
+
+    }
+
+   if (footstepCounter == 14 && controlIter > 1 && controlIter <= 10  && false){ //14
+        
+        comVel(0) = comVel(0) + 0.01*3;
+        comVel(1) = comVel(1) - 0.01*5;
+        push<< 3*39,-5*39,0.0; 
+
+    }
+
+
+    }
+
+   if (sim_0 == 0) {
+
+    if (footstepCounter == 11 && controlIter > 1 && controlIter <= 10 ){ //14
+        
+        comVel(1) = comVel(1) + 0.01*4;
+        push<< 0.0,4*39,0.0; 
+
+    }
+
+   if (footstepCounter == 12 && controlIter > 1 && controlIter <= 10 ){ //14
+        
+        comVel(0) = comVel(0) - 0.01*3.8;
+
+        push<< -3.8*39,0.0,0.0; 
+
+    }
+
+
+   }
+
+
+   if (sim_0 == 2) {
+
+    if (footstepCounter == 6 || footstepCounter == 7){ //14
+        
+        comVel(0) = measuredComVel(0);
+        comVel(1) = 0.3*comVel(1) + 0.7*measuredComVel(1);
+        if(footstepCounter == 6 && controlIter > 1 && controlIter <= 10) push<< -7*39,0.0,0.0; 
+        //if(footstepCounter == 11 && controlIter > 1 && controlIter <= 10) push<< 2*39,0.0,0.0; 
+    }
+
+if (footstepCounter == 12 && controlIter > 1 && controlIter <= 10 ){ //14
+        
+        comVel(0) = comVel(0) + 0.01*3.8;
+        comVel(1) = comVel(1) - 0.01*3.8;
+
+        push<< 3.8*39,-3.8*39,0.0; 
+
+    }
+
+   }
+
+
 
 }
 
@@ -265,6 +317,8 @@ if (widgetReference==false) {
     zmpPos(1) = (1-measuredZmpWeight)*zmpPos(1) + measuredZmpWeight*measuredZmpPos(1);
 
 /**/
+
+
 
     // Timing adaptation
     ComputeFeasibilityRegion();
@@ -345,7 +399,7 @@ if (widgetReference==false) {
 
 
   // Timing manager update
-     if (Timing_Manager(0,0)-controlTimeStep > 0.005) {
+     if (Timing_Manager(0,0)-controlTimeStep > 0.0099) { //>= 0.0
 
          Timing_Manager(0,0) = Timing_Manager(0,0) - controlTimeStep;
          Timing_Manager(4,0) = Timing_Manager(4,0) + controlTimeStep;
@@ -381,7 +435,7 @@ if (widgetReference==false) {
 
     }
 
-
+/**/
 
 if(activate_timing_adaptation){
     if(Timing_Manager(5,0)==1){
@@ -390,6 +444,8 @@ if(activate_timing_adaptation){
     	controlIter = 0;
     	mpcIter = 0;
         footstepCounter++;
+        std::cout<<"time ="<< simulationTime<<std::endl;
+        std::cout << "Iteration " << controlIter << " Footstep " << footstepCounter << std::endl;
     }
 }else{
     if(mpcIter>=S+D){ 
@@ -398,6 +454,7 @@ if(activate_timing_adaptation){
     	controlIter = 0;
     	mpcIter = 0;
         footstepCounter++;
+        std::cout << "Iteration " << controlIter << " Footstep " << footstepCounter << std::endl;
     }
 
 }
@@ -405,7 +462,7 @@ if(activate_timing_adaptation){
   
 
 
-    std::cout << "Iteration " << controlIter << " Footstep " << footstepCounter << std::endl;
+
 }
 
 
@@ -653,7 +710,7 @@ if (false){
 void MPCSolver::TimingAdaptation() {
 
             if (footstepCounter>0){
-            margin_x = 0.015;
+            margin_x = 0.02;  //0.015
             margin_y = 0.015;
             }else{
             margin_x = 0.0;
@@ -715,23 +772,29 @@ void MPCSolver::TimingAdaptation() {
         }
 
         // y component
-        std::cout<<y_u_m<<" " <<yu_state<<" " <<y_u_M<<std::endl;
+
+         if (footstepCounter%2==1){ yu_state = -yu_state;
+           y_u_M = -((-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot));
+           y_u_m = -((d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot));
+
+           }    
+
 
         if ( (y_u_M-yu_state)*(y_u_M-yu_state) < (-y_u_m+yu_state)*(-y_u_M+yu_state)){
 
-           if (footstepCounter%2==1){ yu_state = -yu_state;
-           y_u_m = -y_u_M;
-           y_u_M = -y_u_m;
-           }
 
-        std::cout<<y_u_m<<" " <<yu_state<<" " <<y_u_M<<std::endl;
            // upper bound can be activated
 
            if(yu_state>=y_u_M-margin_y){
 
                 double l0;
+                if(Timing_Manager(0,1) == 1) l0 = exp(-omega*(Timing_Manager(0,0)+Timing_Manager(1,0)-0.04));  // -0.03
+                else { 
                 if(Timing_Manager(0,1) == 1) l0 = exp(-omega*(Timing_Manager(0,0)+Timing_Manager(1,0)-0.03));
-                else l0 = exp(-omega*(Timing_Manager(0,0)-0.03));
+                if(Timing_Manager(0,1) == 0) l0 = exp(-omega*(Timing_Manager(0,0)-0.03));
+                }
+
+
 
                 if (l0<=t_MAX) new_timing_y = -(1/omega)*log(l0);
                 else new_timing_y = -(1/omega)*log(t_MAX);
@@ -742,11 +805,15 @@ void MPCSolver::TimingAdaptation() {
             }
 
         }else{
+
+
            // lower bound can be activated
 
            if(yu_state<=y_u_m+margin_y){
 
+
            double l0 = (yu_state-margin_y+d/2 +(-d/2+deltaYIn-deltaYOut)*lambda_tot)/(d/2-(d/2+deltaYOut)*(1-lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_1));
+
 
            if (l0<=t_MAX) new_timing_y = -(1/omega)*log(l0);
            else new_timing_y = -(1/omega)*log(t_MAX);
@@ -757,28 +824,27 @@ void MPCSolver::TimingAdaptation() {
             }
         }
  
-           if (footstepCounter%2==1){ yu_state = -yu_state;
-           y_u_m = -y_u_M;
-           y_u_M = -y_u_m;
+         if (footstepCounter%2==1){ yu_state = -yu_state;
+           y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
            }    
 
-     std::cout <<"timing_x " << new_timing_x<<std::endl;
-     std::cout <<"timing_y " << new_timing_y<<std::endl;
+
 
      if(new_timing_x<new_timing_y) new_timing = new_timing_x;
      if(new_timing_y<new_timing_x) new_timing = new_timing_y;
      if(new_timing_y==new_timing_x) new_timing = new_timing_y;
 
-
-        std::cout << "NEW TIMING " << new_timing << std::endl;
-
      if (Timing_Manager(0,0)>0.1 && Timing_Manager(0,1) == 1 && new_timing -0.2 + 0.01 < Timing_Manager(0,0) && footstepCounter>2 && new_timing>0){
      Timing_Manager(4,0) = Timing_Manager(0,0)-(new_timing-0.2);
      Timing_Manager(0,2) = Timing_Manager(0,2)*(new_timing-0.2)/Timing_Manager(0,0);
-     Timing_Manager(0,0) = (new_timing-0.2)+0*0.01;
+     if (0.01*round((new_timing-0.2)/0.01)> 0.01){
+     Timing_Manager(0,0) = 0.01*round((new_timing-0.2)/0.01);
+     }else{
+     Timing_Manager(0,0) = 0.01*round((new_timing-0.2)/0.01)+0*0.02;
+     }
      Timing_Manager(4,2) = Timing_Manager(4,0);
      CountDown = round((new_timing)/0.01);
-     //int y = getchar();
      }
 
      if (Timing_Manager(0,0)>0.08 && Timing_Manager(0,1) == 0 && new_timing + 0.01 < Timing_Manager(0,0) && footstepCounter>2 &&  new_timing>0){
@@ -850,11 +916,7 @@ if(Timing_Manager(0,1) == 1){
      }
      }
 
-/*     
-     std::cout<<"t_ss_x " << t_ss_x <<std::endl;
-     std::cout<<"t_ss_y " << t_ss_y <<std::endl;
-     std::cout<<Timing_Manager<<std::endl;
-     if(t_ss_x != 0.0 || t_ss_y != 0.0) int h = getchar();/**/
+
 }
 
 }
@@ -927,8 +989,15 @@ if(activate_timing_adaptation){
 
             Ic.block(0,0,S_1-mpcIter,S_1-mpcIter) = Eigen::MatrixXd::Identity(S_1-mpcIter,S_1-mpcIter);
             Ic.block(S_1-mpcIter,S_1-mpcIter,D_1,D_1) = Eigen::MatrixXd::Zero(D_1,D_1);
+/*
+            Ic.block(S_1-mpcIter,S_1-mpcIter,D_1,D_1) = (Eigen::MatrixXd::Ones(D_1,D_1));
+            Ic.block(S_1-mpcIter,S_1-mpcIter,D_1,D_1) = 0.5*Ic.block(S_1-mpcIter,S_1-mpcIter,D_1,D_1);/**/
+
             Ic.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2,S_2) = Eigen::MatrixXd::Identity(S_2,S_2);
             Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = Eigen::MatrixXd::Zero(D_2,D_2);
+/*
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = (Eigen::MatrixXd::Ones(D_2,D_2));
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = 0.5*Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2);/**/
 
             if (mpcIter>0) Ic.block(S_1+D_1+S_2+D_2-mpcIter,S_1+D_1+S_2+D_2-mpcIter,mpcIter,mpcIter) = Eigen::MatrixXd::Identity(mpcIter,mpcIter);
 
@@ -946,6 +1015,7 @@ if(activate_timing_adaptation){
 
 
         }else{
+
 
             // First predicted step (actually performed)   
             D_1 = round(Timing_Manager(0,2)/mpcTimeStep);
@@ -969,19 +1039,17 @@ if(activate_timing_adaptation){
             if (S_1+D_1+S_2+D_2+D_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) == 0) D_1 = D_1+1;
             //if (S_1+D_1+S_2+D_2+D_3<20 && floor(Timing_Manager(4,0)/mpcTimeStep) > 0) D_3 = D_3+1;
 
-/*
-            std::cout<<"S_1 "<<S_1<<std::endl;
-            std::cout<<"D_1 "<<D_1<<std::endl;
-            std::cout<<"S_2 "<<S_2<<std::endl;
-            std::cout<<"D_2 "<<D_2<<std::endl;
-            std::cout<<"mpcIter "<<mpcIter<<std::endl;
-       std::cout<<"TM"<<std::endl;
-        std::cout<<Timing_Manager<<std::endl;/**/
 
             Ic.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = Eigen::MatrixXd::Zero(S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+/*
+            Ic.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = (Eigen::MatrixXd::Ones(S_1+D_1-mpcIter,S_1+D_1-mpcIter));
+            Ic.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter) = 0.5*Ic.block(0,0,S_1+D_1-mpcIter,S_1+D_1-mpcIter);
+/**/
             Ic.block(S_1+D_1-mpcIter,S_1+D_1-mpcIter,S_2,S_2) = Eigen::MatrixXd::Identity(S_2,S_2);
             Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = Eigen::MatrixXd::Zero(D_2,D_2);
-
+/*
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = (Eigen::MatrixXd::Ones(D_2,D_2));
+            Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2) = 0.5*(Ic.block(S_1+D_1+S_2-mpcIter,S_1+D_1+S_2-mpcIter,D_2,D_2));/**/
 
             if (mpcIter-S_1<=0){
 
@@ -1006,6 +1074,9 @@ if(activate_timing_adaptation){
 	if((int)simulationTime/mpcTimeStep<S+D){
 		Ic.block(0,0,S+D-mpcIter,S+D-mpcIter) = Eigen::MatrixXd::Zero(S+D-mpcIter,S+D-mpcIter);
 	}
+
+
+
 
 
 	Eigen::MatrixXd Cc_ = Eigen::MatrixXd::Zero(N,M);
@@ -1112,9 +1183,15 @@ void MPCSolver::genCostFunction() {
 	costFunctionH.block(0,0,N,N) = qZd*Eigen::MatrixXd::Identity(N,N) + qVx*Vu.transpose()*Vu + qZ*P.transpose()*P;
 	costFunctionH.block(N+M,N+M,N,N) = qZd*Eigen::MatrixXd::Identity(N,N) + qVy*Vu.transpose()*Vu + qZ*P.transpose()*P;
 
+
 	costFunctionH.block(0,N,N,M) = -qZ*P.transpose()*Cc;
+
+
 	costFunctionH.block(N,0,M,N) = -qZ*Cc.transpose()*P;
+
+
 	costFunctionH.block(N,N,M,M) = qZ*Cc.transpose()*Cc;
+
 
 	costFunctionH.block(N+M,2*N+M,N,M) = -qZ*P.transpose()*Cc;
 	costFunctionH.block(2*N+M,N+M,M,N) = -qZ*Cc.transpose()*P;

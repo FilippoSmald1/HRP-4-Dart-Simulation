@@ -10,6 +10,7 @@ using namespace dart::simulation;
 
 double body_angles[] = {0,0,0};
 double startWalk = 0;
+int sim0 = 2;
 
 Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 		dart::simulation::WorldPtr _world)
@@ -52,7 +53,7 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 		comInitialPosition = mRobot->getCOM(mSupportFoot);
 	}
 
-        std::cout << comInitialPosition << std::endl;
+
 	double comTargetHeight = 0.84; //0.85
         CTH = comTargetHeight;
 
@@ -95,7 +96,89 @@ Controller::~Controller()
 void Controller::update()
 { 
 
-        std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
+        if(sim0 == 2 && footstepCounter>=6 && footstepCounter<=7){ 
+        //std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
+        mSwingFoot->addExtForce(solver->push);
+
+
+        auto visualShapeNodes = mSwingFoot->getShapeNodesWith<VisualAspect>();
+        auto _visualShapeNodes = mSupportFoot->getShapeNodesWith<VisualAspect>();
+        auto visualShapeNodes_ = mTorso->getShapeNodesWith<VisualAspect>();
+        if(visualShapeNodes_.size() == 3u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        visualShapeNodes_[2]->remove();
+        }
+
+        if(visualShapeNodes.size() == 3u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        visualShapeNodes[2]->remove();
+        }
+        if(_visualShapeNodes.size() == 3u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        _visualShapeNodes[2]->remove();
+        }
+
+        if(solver->push(0) != 0.0 || solver->push(1) != 0.0){
+        tail_counter = 30;
+        }
+
+        if (solver->push(0) != 0.0 && footstepCounter>=6){
+        std::shared_ptr<ArrowShape> mArrow;
+
+        ArrowShape::Properties arrow_properties;
+        arrow_properties.mRadius = 0.05;
+        Eigen::Vector3d tail_offset = Eigen::Vector3d(0.0, 0.0, 0.0);
+        if(solver->push(0) > 0) tail_offset(0) = 0.65;
+        if(solver->push(0) < 0) tail_offset(0) = -0.65;
+        if(solver->push(1) > 0) tail_offset(1) = 0.65;
+        if(solver->push(1) < 0) tail_offset(1) = -0.65;
+
+        Eigen::Vector3d tail_pos = Eigen::Vector3d(-0.1, 0.0, 0.15) ;
+        if(solver->push(0) < 0) tail_pos = Eigen::Vector3d(0.1, 0.0, 0.15) ;
+        if(solver->push(1) < 0) tail_pos = Eigen::Vector3d(0.1, +0.1, 0.15) ;
+        if(solver->push(1) > 0) tail_pos = Eigen::Vector3d(0.1, -0.1, 0.15) ;
+
+        Eigen::Vector3d head_pos = tail_pos - tail_offset;
+
+        mArrow = std::shared_ptr<ArrowShape>(new ArrowShape(
+             Eigen::Vector3d(0.0, 0.0, 0.0),
+             Eigen::Vector3d(0.2, 0.05, 0.05),
+             arrow_properties, dart::Color::Red(1.0)));
+        mArrow->setPositions(
+            head_pos,
+            tail_pos);
+      
+        mSwingFoot->createShapeNodeWith<VisualAspect>(mArrow);
+
+        tail_counter = tail_counter-1;
+        std::cout<<"ARROW"<<std::endl;
+        if(footstepCounter>=7){
+        if(visualShapeNodes_.size() == 3u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        visualShapeNodes_[2]->remove();
+        }
+
+        if(visualShapeNodes.size() == 3u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        visualShapeNodes[2]->remove();
+        }
+        if(_visualShapeNodes.size() == 3u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        _visualShapeNodes[2]->remove();
+        }
+        }
+
+
+        }
+
+        }else{
+        //std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
         mTorso->addExtForce(solver->push);
 
         auto visualShapeNodes = mTorso->getShapeNodesWith<VisualAspect>();
@@ -120,19 +203,23 @@ void Controller::update()
         if(solver->push(1) < 0) tail_offset(1) = -0.65;
 
         Eigen::Vector3d tail_pos = Eigen::Vector3d(-0.1, 0.0, 0.15) ;
+        if(solver->push(0) < 0) tail_pos = Eigen::Vector3d(0.1, 0.0, 0.15) ;
+        if(solver->push(1) < 0) tail_pos = Eigen::Vector3d(0.1, +0.1, 0.15) ;
+        if(solver->push(1) > 0) tail_pos = Eigen::Vector3d(0.1, -0.1, 0.15) ;
+
         Eigen::Vector3d head_pos = tail_pos - tail_offset;
 
         mArrow = std::shared_ptr<ArrowShape>(new ArrowShape(
              Eigen::Vector3d(0.0, 0.0, 0.0),
              Eigen::Vector3d(0.2, 0.05, 0.05),
-             arrow_properties, dart::Color::Orange(1.0)));
+             arrow_properties, dart::Color::Red(1.0)));
         mArrow->setPositions(
             head_pos,
             tail_pos);
         mTorso->createShapeNodeWith<VisualAspect>(mArrow);
         tail_counter = tail_counter-1;
         }
-        
+        }
 
 	Eigen::VectorXd qDot;
 
@@ -165,14 +252,18 @@ void Controller::storeData() {
         COMPOS = solver->getOptimalCoMPosition();
         Eigen::VectorXd COMVEL = Eigen::VectorXd::Zero(3);
         COMVEL = solver->getOptimalCoMVelocity();
-        Eigen::VectorXd ZMPPOS = Eigen::VectorXd::Zero(3);
-        ZMPPOS = solver->getOptimalZMPPosition();
+
+
         Eigen::VectorXd COMPOS_meas  = Eigen::VectorXd::Zero(3);
         COMPOS_meas = mTorso->getCOM();
         Eigen::VectorXd COMVEL_meas  = Eigen::VectorXd::Zero(3);
         COMVEL_meas = mTorso->getCOMLinearVelocity();
         Eigen::VectorXd FOOT_meas  = Eigen::VectorXd::Zero(3);
         FOOT_meas = mSupportFoot->getCOM();
+
+        Eigen::VectorXd ZMPPOS = Eigen::VectorXd::Zero(3);
+        ZMPPOS = solver->getOptimalZMPPosition();
+
 
         ofstream myfile;
 
@@ -201,6 +292,12 @@ void Controller::storeData() {
         myfile << COMPOS_meas(1) <<endl; 
         myfile.close();
 
+        myfile.open ("./Data/xd.txt",ios::app);
+        myfile << mRobot->getCOMLinearVelocity()(0) <<endl; 
+        myfile.close();
+        myfile.open ("./Data/yd.txt",ios::app);
+        myfile << mRobot->getCOMLinearVelocity()(1) <<endl; 
+        myfile.close();       
         myfile.open ("./Data/x_u_M.txt",ios::app);
         myfile << f_r(0) <<endl; 
         myfile.close();
@@ -218,11 +315,13 @@ void Controller::storeData() {
         myfile.close();
         myfile.open ("./Data/y_u.txt",ios::app);
         myfile << COMPOS(1)+COMVEL(1)/3.41739249 <<endl; 
+        myfile.close();
         myfile.open ("./Data/x_um.txt",ios::app);
-        myfile << COMPOS_meas(0)+COMVEL_meas(0)/3.41739249 <<endl; 
+        myfile << mTorso->getCOM(mSupportFoot)(0)+COMVEL_meas(0)/3.41739249 <<endl; 
         myfile.close();
         myfile.open ("./Data/y_um.txt",ios::app);
-        myfile << COMPOS_meas(1)+COMVEL_meas(1)/3.41739249 <<endl;
+        myfile << mTorso->getCOM(mSupportFoot)(1)+COMVEL_meas(1)/3.41739249 <<endl;
+        myfile.close();
 }
 
 Eigen::VectorXd Controller::generateWalking(){
@@ -272,19 +371,43 @@ Eigen::VectorXd Controller::generateWalking(){
 
 
 
-        bool widj_ref = true;
+        bool widj_ref = false;
 
         double vx, vy, vth;
 
+        
+        if (sim0 == 1) {
+        vx = 0.0;
+        vy = 0.0;
+        vth = 0.0;
+        }
+        if (sim0 == 0){
         if (footstepCounter<=3) {
         vx = 0.0;
         vy = 0.0;
         vth = 0.0;
         }else{
-        vx = 0*0.1;
-        vy = 0*0.1;
+        vx = -0.1;  //0.2
+        vy = -0.1;
         vth = 0.0;
         }
+
+        }
+
+        if (sim0 == 2){
+        if (footstepCounter<=1) {
+        vx = 0.0;
+        vy = 0.0;
+        vth = 0.0;
+        }else{
+        vx = 0.1;  //0.2
+        vy = 0.0;
+        vth = 0.0;
+        }
+
+        }
+
+
 /**/
 	// Compute the CoM prediction using MPC
 	solver->solve(comCurrentPosition, comCurrentVelocity, comCurrentAcceleration, mSwingFoot->getTransform(mSupportFoot),
@@ -674,6 +797,7 @@ Eigen::Vector3d Controller::getZmpFromExternalForces()
 	Eigen::Vector3d left_cop;
 
 
+
 	if(abs(left_foot->getConstraintImpulse()[5])>0.01){
 		left_cop << -(left_foot)->getConstraintImpulse()(1)/(left_foot)->getConstraintImpulse()(5)  ,  (left_foot)->getConstraintImpulse()(0)/(left_foot)->getConstraintImpulse()(5),0.0;
 		Eigen::Matrix3d iRotation = left_foot->getWorldTransform().rotation();
@@ -681,6 +805,7 @@ Eigen::Vector3d Controller::getZmpFromExternalForces()
 		left_cop = iTransl + iRotation*left_cop;
 		left_contact = true;
 	}
+
 	dart::dynamics::BodyNode* right_foot = mRobot->getBodyNode("r_sole");
 	Eigen::Vector3d right_cop;
 
@@ -715,6 +840,9 @@ Eigen::Vector3d Controller::getZmpFromExternalForces()
 		zmp_v.push_back(0.0);
 		zmp_v.push_back(0.0);
 	}
+
+        std::cout << "right_foot->getConstraintImpulse() "<< right_foot->getConstraintImpulse() <<std::endl;
+        std::cout << "left_foot->getConstraintImpulse() "<< right_foot->getConstraintImpulse() <<std::endl;
 
 	Eigen::Vector3d returnZmp;
 	returnZmp << zmp_v[0], zmp_v[1], zmp_v[2];
@@ -912,12 +1040,12 @@ void Controller::setInitialConfiguration() {
   std::cout <<"R_HIP_P " << mRobot->getDof("R_HIP_P")->getIndexInSkeleton()<< std::endl;
   std::cout <<"R_KNEE_P " << mRobot->getDof("R_KNEE_P")->getIndexInSkeleton()<< std::endl;
   std::cout <<"R_ANKLE_P " << mRobot->getDof("R_ANKLE_P")->getIndexInSkeleton()<< std::endl;
-  std::cout <<"R_ANKLE_R " << mRobot->getDof("R_ANKLE_R")->getIndexInSkeleton()<< std::endl;/**/
+  std::cout <<"R_ANKLE_R " << mRobot->getDof("R_ANKLE_R")->getIndexInSkeleton()<< std::endl;
 std::cout <<"CHEST_P " << mRobot->getDof("CHEST_P")->getIndexInSkeleton()<< std::endl;
-std::cout <<"CHEST_Y " << mRobot->getDof("CHEST_Y")->getIndexInSkeleton()<< std::endl;
+std::cout <<"CHEST_Y " << mRobot->getDof("CHEST_Y")->getIndexInSkeleton()<< std::endl;/**/
 
   Eigen::VectorXd q = mRobot->getPositions();
-  std::cout <<q.size()<< std::endl;
+  //std::cout <<q.size()<< std::endl;
 
 // Floating Base
   q[0] = 0.0;

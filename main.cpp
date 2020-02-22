@@ -8,6 +8,8 @@
 #include "NaoWidget.hpp"
 #include <dart/common/LocalResourceRetriever.hpp>
 
+
+
 int main(int argc, char* argv[])
 {
   // Create a world
@@ -45,6 +47,7 @@ int main(int argc, char* argv[])
   world->setGravity(Eigen::Vector3d(0.0, 0.0, -9.81));
   world->setTimeStep(1.0/100.0);
 
+
   // Wrap a WorldNode around it
   osg::ref_ptr<NaoWorldNode> node
       = new NaoWorldNode(world, nao);
@@ -68,12 +71,17 @@ int main(int argc, char* argv[])
   viewer.realize();
   osgViewer::Viewer::Windows windows;
   viewer.getWindows(windows);
-  windows.front()->setWindowName("Nao MPC");
+  windows.front()->setWindowName("HRP-4 MPC");
 
   // Adjust the viewpoint of the Viewer
+/*
   viewer.getCameraManipulator()->setHomePosition(
-        ::osg::Vec3d( 5.14,  3.28, 6.28)*1,
-        ::osg::Vec3d( 1.00,  0.00, 0.00),
+        ::osg::Vec3d( 5.14,  3.28, 6.28)*0.7,
+        ::osg::Vec3d( 0.50,  -1.00, 0.00),
+        ::osg::Vec3d( 0.00,  0.00, 0.1));/**/
+  viewer.getCameraManipulator()->setHomePosition(
+        ::osg::Vec3d( 5.14,  3.28, 6.28)*0.7,
+        ::osg::Vec3d( 0.50,  -1.00, 0.00),
         ::osg::Vec3d( 0.00,  0.00, 0.1));
 
   // We need to re-dirty the CameraManipulator by passing it into the viewer
