@@ -8,6 +8,7 @@
 
 using namespace mpcSolver;
 
+
 MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predictionTime, Eigen::Vector3d initialComPosition,
                      double comTargetHeight, double singleSupportDuration, double doubleSupportDuration, double thetaMax,
 					 double footConstraintSquareWidth, double deltaXMax, double deltaYIn, double deltaYOut, double measuredComWeight, double measuredZmpWeight, bool _activate_timing_adaptation ){
@@ -167,6 +168,8 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     footstepsOptimalY = Eigen::VectorXd::Zero(M);
 
 
+    adaptSim = true;
+    
 }
 
 void MPCSolver::solve(Eigen::Vector3d measuredComPos, Eigen::Vector3d measuredComVel, Eigen::Vector3d measuredComAcc,
@@ -231,9 +234,9 @@ if (widgetReference==false) {
 
     if (footstepCounter == 7 && controlIter > 1 && controlIter <= 10 ){ 
         
-        comVel(0) = comVel(0) + 0.01*5;
-        comVel(1) = comVel(1) + 0.01*4; //-0.01*4
-        push<< +5*39,4*39,0.0; 
+        comVel(0) = comVel(0) + 0.01*5.3;
+        comVel(1) = comVel(1) + 0.01*4.4; //+0.01*4
+        push<< +5.3*39,4.4*39,0.0; 
 
     }
 
@@ -259,8 +262,8 @@ if (widgetReference==false) {
 
     if (footstepCounter == 11 && controlIter > 1 && controlIter <= 10 ){ //14
         
-        comVel(1) = comVel(1) + 0.01*4;
-        push<< 0.0,4*39,0.0; 
+        comVel(1) = comVel(1) + 0.01*4.5; //4
+        push<< 0.0,4.5*39,0.0; 
 
     }
 
@@ -835,7 +838,7 @@ void MPCSolver::TimingAdaptation() {
      if(new_timing_y<new_timing_x) new_timing = new_timing_y;
      if(new_timing_y==new_timing_x) new_timing = new_timing_y;
 
-     if (Timing_Manager(0,0)>0.1 && Timing_Manager(0,1) == 1 && new_timing -0.2 + 0.01 < Timing_Manager(0,0) && footstepCounter>2 && new_timing>0){
+     if (Timing_Manager(0,0)>0.1 && Timing_Manager(0,1) == 1 && new_timing -0.2 + 0.01 < Timing_Manager(0,0) && footstepCounter>2 && new_timing>0 && adaptSim){
      Timing_Manager(4,0) = Timing_Manager(0,0)-(new_timing-0.2);
      Timing_Manager(0,2) = Timing_Manager(0,2)*(new_timing-0.2)/Timing_Manager(0,0);
      if (0.01*round((new_timing-0.2)/0.01)> 0.01){
@@ -847,7 +850,7 @@ void MPCSolver::TimingAdaptation() {
      CountDown = round((new_timing)/0.01);
      }
 
-     if (Timing_Manager(0,0)>0.08 && Timing_Manager(0,1) == 0 && new_timing + 0.01 < Timing_Manager(0,0) && footstepCounter>2 &&  new_timing>0){
+     if (Timing_Manager(0,0)>0.08 && Timing_Manager(0,1) == 0 && new_timing + 0.01 < Timing_Manager(0,0) && footstepCounter>2 &&  new_timing>0 && adaptSim){
      Timing_Manager(4,0) = Timing_Manager(0,0)-(new_timing);
      Timing_Manager(0,2) = Timing_Manager(0,2)*(new_timing)/Timing_Manager(0,0);
      Timing_Manager(0,0) = 0.01*round((new_timing)/0.01)+0*0.01;

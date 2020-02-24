@@ -100,6 +100,7 @@ namespace mpcSolver{
         double vRefY=0;
         double omegaRef=0;
         int mpcIter,controlIter;
+        bool adaptSim;
 
         // useful matrices
 	Eigen::MatrixXd Icf;

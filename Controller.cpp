@@ -77,7 +77,7 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
         stepHeight = 0.022;
 	singleSupportDuration = 0.3;
 	doubleSupportDuration = 0.2;
-        bool activateTimingAdaptation = false;
+        bool activateTimingAdaptation = true;
 
         // The following choice strongly simplifies the gait generation algorithm
         double prediction_horizon = 2*(singleSupportDuration+doubleSupportDuration);
@@ -96,36 +96,36 @@ Controller::~Controller()
 void Controller::update()
 { 
 
-        if(sim0 == 2 && footstepCounter>=6 && footstepCounter<=7){ 
+        if(sim0 == 2 && footstepCounter== 6 ){ 
         //std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
         mSwingFoot->addExtForce(solver->push);
 
 
         auto visualShapeNodes = mSwingFoot->getShapeNodesWith<VisualAspect>();
-        auto _visualShapeNodes = mSupportFoot->getShapeNodesWith<VisualAspect>();
-        auto visualShapeNodes_ = mTorso->getShapeNodesWith<VisualAspect>();
-        if(visualShapeNodes_.size() == 3u)
+
+
+        if(visualShapeNodes.size() == 1u)
         {
         //assert(visualShapeNodes[2]->getShape() == mArrow);
-        visualShapeNodes_[2]->remove();
+        visualShapeNodes[0]->remove();
         }
-
+        if(visualShapeNodes.size() == 2u)
+        {
+        //assert(visualShapeNodes[2]->getShape() == mArrow);
+        visualShapeNodes[1]->remove();
+        }
         if(visualShapeNodes.size() == 3u)
         {
         //assert(visualShapeNodes[2]->getShape() == mArrow);
         visualShapeNodes[2]->remove();
         }
-        if(_visualShapeNodes.size() == 3u)
-        {
-        //assert(visualShapeNodes[2]->getShape() == mArrow);
-        _visualShapeNodes[2]->remove();
-        }
+        
 
         if(solver->push(0) != 0.0 || solver->push(1) != 0.0){
         tail_counter = 30;
         }
 
-        if (solver->push(0) != 0.0 && footstepCounter>=6){
+        if (solver->push(0) != 0.0){
         std::shared_ptr<ArrowShape> mArrow;
 
         ArrowShape::Properties arrow_properties;
@@ -154,30 +154,57 @@ void Controller::update()
         mSwingFoot->createShapeNodeWith<VisualAspect>(mArrow);
 
         tail_counter = tail_counter-1;
-        std::cout<<"ARROW"<<std::endl;
-        if(footstepCounter>=7){
-        if(visualShapeNodes_.size() == 3u)
-        {
-        //assert(visualShapeNodes[2]->getShape() == mArrow);
-        visualShapeNodes_[2]->remove();
         }
 
+       
+
+        }
+
+        if(sim0 == 0 || sim0 == 1){
+        //std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
+        mTorso->addExtForce(solver->push);
+
+        auto visualShapeNodes = mTorso->getShapeNodesWith<VisualAspect>();
         if(visualShapeNodes.size() == 3u)
         {
         //assert(visualShapeNodes[2]->getShape() == mArrow);
         visualShapeNodes[2]->remove();
         }
-        if(_visualShapeNodes.size() == 3u)
-        {
-        //assert(visualShapeNodes[2]->getShape() == mArrow);
-        _visualShapeNodes[2]->remove();
+
+        if(solver->push(0) != 0.0 || solver->push(1) != 0.0){
+        tail_counter = 110;
+        }
+
+        if (tail_counter >0 && mWorld->getSimFrames()>100){
+        std::shared_ptr<ArrowShape> mArrow;
+        ArrowShape::Properties arrow_properties;
+        arrow_properties.mRadius = 0.05;
+        Eigen::Vector3d tail_offset = Eigen::Vector3d(0.0, 0.0, 0.0);
+        if(solver->push(0) > 0) tail_offset(0) = 0.65;
+        if(solver->push(0) < 0) tail_offset(0) = -0.65;
+        if(solver->push(1) > 0) tail_offset(1) = 0.65;
+        if(solver->push(1) < 0) tail_offset(1) = -0.65;
+
+        Eigen::Vector3d tail_pos = Eigen::Vector3d(-0.1, 0.0, 0.15) ;
+        if(solver->push(0) < 0) tail_pos = Eigen::Vector3d(0.1, 0.0, 0.15) ;
+        if(solver->push(1) < 0) tail_pos = Eigen::Vector3d(0.1, +0.1, 0.15) ;
+        if(solver->push(1) > 0) tail_pos = Eigen::Vector3d(0.1, -0.1, 0.15) ;
+
+        Eigen::Vector3d head_pos = tail_pos - tail_offset;
+
+        mArrow = std::shared_ptr<ArrowShape>(new ArrowShape(
+             Eigen::Vector3d(0.0, 0.0, 0.0),
+             Eigen::Vector3d(0.2, 0.05, 0.05),
+             arrow_properties, dart::Color::Red(1.0)));
+        mArrow->setPositions(
+            head_pos,
+            tail_pos);
+        mTorso->createShapeNodeWith<VisualAspect>(mArrow);
+        tail_counter = tail_counter-1;
         }
         }
 
-
-        }
-
-        }else{
+        if(sim0 == 2 && footstepCounter>10){
         //std::cout << "Sim Frames " << mWorld->getSimFrames() << std::endl;
         mTorso->addExtForce(solver->push);
 
