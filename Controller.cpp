@@ -10,7 +10,7 @@ using namespace dart::simulation;
 
 double body_angles[] = {0,0,0};
 double startWalk = 0;
-int sim0 = 2;
+int sim0 = 1;
 
 Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 		dart::simulation::WorldPtr _world)
@@ -20,6 +20,8 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
 	assert(_robot != nullptr);
 
 	ikGain = 20;
+
+
 
 	// some useful pointers to robot limbs
 	leftFoot = mRobot->getBodyNode("l_sole");
@@ -77,7 +79,7 @@ Controller::Controller(dart::dynamics::SkeletonPtr _robot,
         stepHeight = 0.022;
 	singleSupportDuration = 0.3;
 	doubleSupportDuration = 0.2;
-        bool activateTimingAdaptation = true;
+        bool activateTimingAdaptation = false;
 
         // The following choice strongly simplifies the gait generation algorithm
         double prediction_horizon = 2*(singleSupportDuration+doubleSupportDuration);
@@ -407,6 +409,7 @@ Eigen::VectorXd Controller::generateWalking(){
         vx = 0.0;
         vy = 0.0;
         vth = 0.0;
+
         }
         if (sim0 == 0){
         if (footstepCounter<=3) {
@@ -458,6 +461,7 @@ Eigen::VectorXd Controller::generateWalking(){
 
         OptFootPositioning = solver->getOptimalFootsteps();
 
+
 if (!(solver->supportFootHasChanged())) {
         if ((OptFootPositioning(3) - PreviousOptTargetFootPose(2))*(OptFootPositioning(3) - PreviousOptTargetFootPose(2)) < n_threshold )  OptFootPositioning(3) = PreviousOptTargetFootPose(2); // theta
 
@@ -482,7 +486,7 @@ if (!(solver->supportFootHasChanged())) {
         
 
 	Eigen::VectorXd desPosBase(6);
-	desPosBase << 0.0, 0.0, desPosSwingFoot(2)/2, OptComPos(0), OptComPos(1), OptComPos(2);  
+	desPosBase << 0.0, 0.0, OptFootPositioning(3), OptComPos(0), OptComPos(1), OptComPos(2);  
 
         PreviousOptCom = OptComPos;
 
@@ -724,7 +728,7 @@ Eigen::VectorXd Controller::getJointVelocitiesStacked(Eigen::VectorXd desider_po
 	// Torso Orientation
 	_taskGain(0,0) = 1;
 	_taskGain(1,1) = 1;//0.001;
-	_taskGain(2,2) = 0;//0.001;
+	_taskGain(2,2) = 1;//0;
 
 	// CoM Position
 	_taskGain(3,3) = 10;  //0.1  10

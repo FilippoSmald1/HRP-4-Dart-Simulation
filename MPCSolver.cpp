@@ -168,7 +168,7 @@ MPCSolver::MPCSolver(double mpcTimeStep, double controlTimeStep, double predicti
     footstepsOptimalY = Eigen::VectorXd::Zero(M);
 
 
-    adaptSim = true;
+    adaptSim = false;
     
 }
 
@@ -182,6 +182,7 @@ if (widgetReference==false) {
     this->v_x = vRefX;
     this->v_y = vRefY;
     this->v_th = omegaRef;
+
 }
 
     this->supportFoot = supportFoot;
@@ -228,15 +229,15 @@ if (widgetReference==false) {
 
     if (true) { 
 
-    int sim_0 = 2; 
+    int sim_0 = 1; 
 
-    if (sim_0 == 1){
+    if (sim_0 == 1 && false){
 
     if (footstepCounter == 7 && controlIter > 1 && controlIter <= 10 ){ 
         
-        comVel(0) = comVel(0) + 0.01*5.3;
-        comVel(1) = comVel(1) + 0.01*4.4; //+0.01*4
-        push<< +5.3*39,4.4*39,0.0; 
+        comVel(0) = comVel(0) + 0.01*5;
+        comVel(1) = comVel(1) + 0.01*4.5; //+0.01*4
+        push<< +5*39,4.5*39,0.0; 
 
     }
 
@@ -509,13 +510,13 @@ void MPCSolver::ComputeFeasibilityRegion(){
 
             if(supportFoot == true){
             // right support foot
-            y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
-            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+            y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+1.3*deltaYOut-0*deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+1.3*deltaYIn-0*deltaYOut)*(lambda_0*lambda_1-lambda_tot);
 
             }else{
             // left support foot
-            y_u_M = (d/2)*(1-lambda_0)+(d/2-deltaYIn)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
-            y_u_m = (-d/2)*(1-lambda_0)+(-deltaYOut-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+            y_u_M = (d/2)*(1-lambda_0)+(d/2-deltaYIn)*(lambda_0-lambda_0*lambda_1)+(d/2+0*deltaYOut-1.3*deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(-deltaYOut-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+0*deltaYIn-1.3*deltaYOut)*(lambda_0*lambda_1-lambda_tot);
             }
 
             } else {
@@ -531,13 +532,13 @@ void MPCSolver::ComputeFeasibilityRegion(){
 
             if(supportFoot == true){
             // right support foot
-            y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
-            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+            y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+1.3*deltaYOut-0*deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+1.3*deltaYIn-0*deltaYOut)*(lambda_0*lambda_1-lambda_tot);
 
             }else{
             // left support foot
-            y_u_M = (d/2)*(1-lambda_0)+(d/2-deltaYIn)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
-            y_u_m = (-d/2)*(1-lambda_0)+(-deltaYOut-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+            y_u_M = (d/2)*(1-lambda_0)+(d/2-deltaYIn)*(lambda_0-lambda_0*lambda_1)+(d/2+0*deltaYOut-1.3*deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(-deltaYOut-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+0*deltaYIn-1.3*deltaYOut)*(lambda_0*lambda_1-lambda_tot);
             }
 
 
@@ -714,10 +715,9 @@ void MPCSolver::TimingAdaptation() {
 
             if (footstepCounter>0){
             margin_x = 0.02;  //0.015
-            margin_y = 0.015;
-            }else{
-            margin_x = 0.0;
-            margin_y = 0.0;
+            margin_y = 0.02;
+            //margin_x = 0.0;
+            //margin_y = 0.0;
             }
 
             xu_state = comPos(0)+comVel(0)/omega;
@@ -777,8 +777,8 @@ void MPCSolver::TimingAdaptation() {
         // y component
 
          if (footstepCounter%2==1){ yu_state = -yu_state;
-           y_u_M = -((-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot));
-           y_u_m = -((d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot));
+           y_u_M = -((-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+1.3*deltaYIn-0*deltaYOut)*(lambda_0*lambda_1-lambda_tot));
+           y_u_m = -((d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+1.3*deltaYOut-0*deltaYIn)*(lambda_0*lambda_1-lambda_tot));
 
            }    
 
@@ -828,8 +828,8 @@ void MPCSolver::TimingAdaptation() {
         }
  
          if (footstepCounter%2==1){ yu_state = -yu_state;
-           y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+deltaYOut-deltaYIn)*(lambda_0*lambda_1-lambda_tot);
-            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+deltaYIn-deltaYOut)*(lambda_0*lambda_1-lambda_tot);
+           y_u_M = (d/2)*(1-lambda_0)+(d/2+deltaYOut)*(lambda_0-lambda_0*lambda_1)+(d/2+1.3*deltaYOut-0*deltaYIn)*(lambda_0*lambda_1-lambda_tot);
+            y_u_m = (-d/2)*(1-lambda_0)+(deltaYIn-d/2)*(lambda_0-lambda_0*lambda_1)+(-d/2+1.3*deltaYIn-0*deltaYOut)*(lambda_0*lambda_1-lambda_tot);
            }    
 
 
@@ -1247,6 +1247,12 @@ void MPCSolver::computeOrientations() {
         }
 /**/
 
+        if (widgetReference==false) {
+            vRefX = v_x;
+            vRefY = v_y;
+            omegaRef = v_th;
+        }
+
 	// Rotation cost function
 	Eigen::MatrixXd footstepsH = (differenceMatrix.transpose()*differenceMatrix);
 	Eigen::VectorXd footstepsF = -omegaRef*(ss_d+ds_d)*differenceMatrix.transpose()*Eigen::VectorXd::Ones(M);
@@ -1300,6 +1306,7 @@ void MPCSolver::computeOrientations() {
 	qpRotations.getPrimalSolution(thetaOpt);
 
 	predictedOrientations(0)=0;
+
 
 	if(footstepCounter==0){
 		for(int i=1;i<M;++i){
@@ -1426,6 +1433,9 @@ Eigen::VectorXd MPCSolver::solveQP() {
 	qp.init(H,g,A,0,0,lb,ub,nWSR,NULL,NULL,NULL,NULL,NULL,NULL);
 
 	qp.getPrimalSolution(xOpt);
+   
+        if(qp.isInfeasible()==1) std::cout<< "Infeasible " <<std::endl;
+        //std::cout<< "Infeasible? " <<qp.isInfeasible() << std::endl;
 
 	Eigen::VectorXd decisionVariables(2*(N+M));
 
