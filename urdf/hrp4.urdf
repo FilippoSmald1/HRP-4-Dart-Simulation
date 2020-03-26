@@ -19,13 +19,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/WAIST_LINK.dae"/>
+        <mesh filename="../meshes/WAIST_LINK.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/WAIST_LINK.dae"/>
+        <mesh filename="../meshes/WAIST_LINK.dae"/>
       </geometry>
     </collision>
   </link>
@@ -38,13 +38,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/HIP_Y.dae"/>
+        <mesh filename="../meshes/HIP_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/HIP_Y.dae"/>
+        <mesh filename="../meshes/HIP_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -57,13 +57,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -76,13 +76,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_HIP_P.dae"/>
+        <mesh filename="../meshes/R_HIP_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_HIP_P.dae"/>
+        <mesh filename="../meshes/R_HIP_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -95,13 +95,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_KNEE_P.dae"/>
+        <mesh filename="../meshes/R_KNEE_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_KNEE_P.dae"/>
+        <mesh filename="../meshes/R_KNEE_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -114,13 +114,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_ANKLE_P.dae"/>
+        <mesh filename="../meshes/L_ANKLE_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_ANKLE_P.dae"/>
+        <mesh filename="../meshes/L_ANKLE_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -133,17 +133,49 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_ANKLE_R.dae"/>
+        <mesh filename="../meshes/R_ANKLE_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_ANKLE_R.dae"/>
+        <mesh filename="../meshes/R_ANKLE_R.dae"/>
       </geometry>
     </collision>
   </link>
-  <link name="r_sole"/>
+
+  <link name="r_sole">
+   <visual>
+      <geometry>
+        <box size="0.14 0.078 0.007"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 -0.005 0"/>
+      <material name="blue"/>
+    </visual>
+   <collision>
+      <geometry>
+        <box size="0.14 0.078 0.007"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 -0.005 0"/>
+    </collision>
+    <inertial>
+      <mass value="2e-06"/>
+      <inertia ixx="1.1e-09" ixy="0" ixz="0" iyy="1.1e-09" iyz="0" izz="1.1e-09"/>
+    </inertial>
+  </link>
+<!--
+  <link name="r_sole">
+ <collision>
+      <geometry>
+        <box size="0.08 0.08 0.001"/>
+      </geometry>
+      <origin rpy="0 0.00 0.002" xyz="0.0 0.005 0"/>
+    </collision>
+    <inertial>
+      <mass value="2e-06"/>
+      <inertia ixx="1.1e-09" ixy="0" ixz="0" iyy="1.1e-09" iyz="0" izz="1.1e-09"/>
+    </inertial>
+  </link>-->
   <link name="L_HIP_Y_LINK">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.01667657 2e-08 0.04993135"/>
@@ -153,13 +185,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/HIP_Y.dae"/>
+        <mesh filename="../meshes/HIP_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/HIP_Y.dae"/>
+        <mesh filename="../meshes/HIP_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -172,13 +204,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -191,13 +223,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_HIP_P.dae"/>
+        <mesh filename="../meshes/L_HIP_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_HIP_P.dae"/>
+        <mesh filename="../meshes/L_HIP_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -210,13 +242,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_KNEE_P.dae"/>
+        <mesh filename="../meshes/L_KNEE_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_KNEE_P.dae"/>
+        <mesh filename="../meshes/L_KNEE_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -229,13 +261,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_ANKLE_P.dae"/>
+        <mesh filename="../meshes/L_ANKLE_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_ANKLE_P.dae"/>
+        <mesh filename="../meshes/L_ANKLE_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -248,17 +280,49 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_ANKLE_R.dae"/>
+        <mesh filename="../meshes/L_ANKLE_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_ANKLE_R.dae"/>
+        <mesh filename="../meshes/L_ANKLE_R.dae"/>
       </geometry>
     </collision>
   </link>
-  <link name="l_sole"/>
+
+  <link name="l_sole">
+   <visual>
+      <geometry>
+        <box size="0.14 0.078 0.007"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.005 0"/>
+      <material name="blue"/>
+    </visual>
+   <collision>
+      <geometry>
+        <box size="0.14 0.078 0.007"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.005 0"/>
+    </collision>
+    <inertial>
+      <mass value="2e-06"/>
+      <inertia ixx="1.1e-09" ixy="0" ixz="0" iyy="1.1e-09" iyz="0" izz="1.1e-09"/>
+    </inertial>
+  </link>
+<!--
+  <link name="l_sole">
+   <collision>
+      <geometry>
+        <box size="0.08 0.08 0.001"/>
+      </geometry>
+      <origin rpy="0 0.00 0.002" xyz="0.0 0.005 0"/>
+    </collision>
+    <inertial>
+      <mass value="2e-06"/>
+      <inertia ixx="1.1e-09" ixy="0" ixz="0" iyy="1.1e-09" iyz="0" izz="1.1e-09"/>
+    </inertial>
+  </link>-->
   <link name="CHEST_P_LINK">
     <inertial>
       <origin rpy="0 0 0" xyz="-0.00442006 0.00280574 0.03664874"/>
@@ -268,25 +332,25 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </visual>
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_R.dae"/>
+        <mesh filename="../meshes/CHEST_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </collision>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_P.dae"/>
+        <mesh filename="../meshes/CHEST_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -299,13 +363,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_Y.dae"/>
+        <mesh filename="../meshes/CHEST_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/CHEST_Y.dae"/>
+        <mesh filename="../meshes/CHEST_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -318,13 +382,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/NECK_Y.dae"/>
+        <mesh filename="../meshes/NECK_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/NECK_Y.dae"/>
+        <mesh filename="../meshes/NECK_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -337,13 +401,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/NECK_P.dae"/>
+        <mesh filename="../meshes/NECK_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/NECK_P.dae"/>
+        <mesh filename="../meshes/NECK_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -356,13 +420,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_SHOULDER_P.dae"/>
+        <mesh filename="../meshes/R_SHOULDER_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_SHOULDER_P.dae"/>
+        <mesh filename="../meshes/R_SHOULDER_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -375,13 +439,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_SHOULDER_R.dae"/>
+        <mesh filename="../meshes/R_SHOULDER_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_SHOULDER_R.dae"/>
+        <mesh filename="../meshes/R_SHOULDER_R.dae"/>
       </geometry>
     </collision>
   </link>
@@ -394,13 +458,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/SHOULDER_Y.dae"/>
+        <mesh filename="../meshes/SHOULDER_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/SHOULDER_Y.dae"/>
+        <mesh filename="../meshes/SHOULDER_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -413,13 +477,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/ELBOW_P.dae"/>
+        <mesh filename="../meshes/ELBOW_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/ELBOW_P.dae"/>
+        <mesh filename="../meshes/ELBOW_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -432,13 +496,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_WRIST_Y.dae"/>
+        <mesh filename="../meshes/R_WRIST_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_WRIST_Y.dae"/>
+        <mesh filename="../meshes/R_WRIST_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -451,13 +515,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/WRIST_P.dae"/>
+        <mesh filename="../meshes/WRIST_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/WRIST_P.dae"/>
+        <mesh filename="../meshes/WRIST_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -470,13 +534,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_WRIST_R.dae"/>
+        <mesh filename="../meshes/R_WRIST_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_WRIST_R.dae"/>
+        <mesh filename="../meshes/R_WRIST_R.dae"/>
       </geometry>
     </collision>
   </link>
@@ -489,13 +553,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_THUMB.dae"/>
+        <mesh filename="../meshes/R_THUMB.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_THUMB.dae"/>
+        <mesh filename="../meshes/R_THUMB.dae"/>
       </geometry>
     </collision>
   </link>
@@ -508,13 +572,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_F1.dae"/>
+        <mesh filename="../meshes/R_F1.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_F1.dae"/>
+        <mesh filename="../meshes/R_F1.dae"/>
       </geometry>
     </collision>
   </link>
@@ -527,13 +591,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -546,13 +610,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -565,13 +629,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -584,13 +648,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -603,13 +667,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -622,13 +686,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -641,13 +705,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -660,13 +724,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -679,13 +743,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_SHOULDER_P.dae"/>
+        <mesh filename="../meshes/L_SHOULDER_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_SHOULDER_P.dae"/>
+        <mesh filename="../meshes/L_SHOULDER_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -698,13 +762,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_SHOULDER_R.dae"/>
+        <mesh filename="../meshes/L_SHOULDER_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_SHOULDER_R.dae"/>
+        <mesh filename="../meshes/L_SHOULDER_R.dae"/>
       </geometry>
     </collision>
   </link>
@@ -717,13 +781,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/SHOULDER_Y.dae"/>
+        <mesh filename="../meshes/SHOULDER_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/SHOULDER_Y.dae"/>
+        <mesh filename="../meshes/SHOULDER_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -736,13 +800,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/ELBOW_P.dae"/>
+        <mesh filename="../meshes/ELBOW_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/ELBOW_P.dae"/>
+        <mesh filename="../meshes/ELBOW_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -755,13 +819,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_WRIST_Y.dae"/>
+        <mesh filename="../meshes/L_WRIST_Y.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_WRIST_Y.dae"/>
+        <mesh filename="../meshes/L_WRIST_Y.dae"/>
       </geometry>
     </collision>
   </link>
@@ -774,13 +838,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/WRIST_P.dae"/>
+        <mesh filename="../meshes/WRIST_P.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/WRIST_P.dae"/>
+        <mesh filename="../meshes/WRIST_P.dae"/>
       </geometry>
     </collision>
   </link>
@@ -793,13 +857,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_WRIST_R.dae"/>
+        <mesh filename="../meshes/L_WRIST_R.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_WRIST_R.dae"/>
+        <mesh filename="../meshes/L_WRIST_R.dae"/>
       </geometry>
     </collision>
   </link>
@@ -812,13 +876,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_THUMB.dae"/>
+        <mesh filename="../meshes/L_THUMB.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_THUMB.dae"/>
+        <mesh filename="../meshes/L_THUMB.dae"/>
       </geometry>
     </collision>
   </link>
@@ -831,13 +895,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_F1.dae"/>
+        <mesh filename="../meshes/L_F1.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_F1.dae"/>
+        <mesh filename="../meshes/L_F1.dae"/>
       </geometry>
     </collision>
   </link>
@@ -850,13 +914,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -869,13 +933,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -888,13 +952,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -907,13 +971,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -926,13 +990,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -945,13 +1009,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -964,13 +1028,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F2.dae"/>
+        <mesh filename="../meshes/F2.dae"/>
       </geometry>
     </collision>
   </link>
@@ -983,13 +1047,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/F3.dae"/>
+        <mesh filename="../meshes/F3.dae"/>
       </geometry>
     </collision>
   </link>
@@ -1463,13 +1527,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_FOOT.dae"/>
+        <mesh filename="../meshes/R_FOOT.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/R_FOOT.dae"/>
+        <mesh filename="../meshes/R_FOOT.dae"/>
       </geometry>
     </collision>
   </link>
@@ -1489,13 +1553,13 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_FOOT.dae"/>
+        <mesh filename="../meshes/L_FOOT.dae"/>
       </geometry>
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="/home/filippo/DART codes/DarwinOp/meshes/L_FOOT.dae"/>
+        <mesh filename="../meshes/L_FOOT.dae"/>
       </geometry>
     </collision>
   </link>
